@@ -5,6 +5,7 @@ import 'core/app_providers.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'features/floating_assistant/overlay_service.dart';
+import 'features/floating_assistant/overlay_worker.dart';
 import 'services/storage_service.dart';
 
 Future<void> main() async {
@@ -16,6 +17,14 @@ Future<void> main() async {
       child: const GoGoApp(),
     ),
   );
+}
+
+/// Entry point for the headless engine the floating assistant runs in.
+/// Must live in main.dart — that is the library Android looks the name up in.
+@pragma('vm:entry-point')
+void overlayMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  OverlayWorker().listen();
 }
 
 class GoGoApp extends ConsumerStatefulWidget {

@@ -1,6 +1,5 @@
 package com.gogo.rides
 
-import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -85,44 +84,10 @@ class MainActivity : FlutterActivity() {
         return true
     }
 
-    /**
-     * Hands the user over to a provider's own app. Never books anything —
-     * it just opens the app (or its store page if it isn't installed).
-     * Returns "opened", "store" or "unavailable".
-     */
-    private fun openProvider(packageName: String?, deepLink: String?): String {
-        // A deep link is pinned to the provider's package so it can't be
-        // hijacked by a browser or another app.
-        if (deepLink != null && launch(Intent(Intent.ACTION_VIEW, Uri.parse(deepLink)).apply {
-                if (packageName != null) setPackage(packageName)
-            })
-        ) {
-            return "opened"
-        }
+    private fun openProvider(packageName: String?, deepLink: String?): String =
+        ProviderLauncher.open(this, packageName, deepLink)
 
-        if (packageName == null) return "unavailable"
-
-        packageManager.getLaunchIntentForPackage(packageName)?.let {
-            if (launch(it)) return "opened"
-        }
-
-        val store = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName"))
-        val web = Intent(
-            Intent.ACTION_VIEW,
-            Uri.parse("https://play.google.com/store/apps/details?id=$packageName"),
-        )
-        return if (launch(store) || launch(web)) "store" else "unavailable"
-    }
-
-    private fun isInstalled(packageName: String): Boolean =
-        packageManager.getLaunchIntentForPackage(packageName) != null
-
-    private fun launch(intent: Intent): Boolean = try {
-        startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        true
-    } catch (_: ActivityNotFoundException) {
-        false
-    }
+    private fun isInstalled(packageName: String) = ProviderLauncher.isInstalled(this, packageName)
 
     private companion object {
         const val CHANNEL = "gogo/overlay"

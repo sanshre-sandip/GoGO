@@ -22,8 +22,16 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.LinearLayout
+import android.widget.ProgressBar
+import android.widget.ScrollView
 import android.widget.TextView
+import io.flutter.FlutterInjector
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.dart.DartExecutor
+import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugins.GeneratedPluginRegistrant
 import kotlin.math.abs
+import org.json.JSONObject
 
 /**
  * Foreground service that shows GoGo's floating button over other apps.
@@ -36,7 +44,12 @@ class OverlayService : Service() {
     private lateinit var windowManager: WindowManager
     private var bubble: View? = null
     private var panel: View? = null
+    private var results: LinearLayout? = null
     private val selected = linkedSetOf("cheapest", "nearest")
+
+    /** Headless engine that runs the same comparison code as the app. */
+    private var engine: FlutterEngine? = null
+    private var worker: MethodChannel? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -44,6 +57,7 @@ class OverlayService : Service() {
         super.onCreate()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         startForegroundNotification()
+        startWorkerEngine()
         showBubble()
         isRunning = true
     }
@@ -58,6 +72,9 @@ class OverlayService : Service() {
     }
 
     override fun onDestroy() {
+        engine?.destroy()
+        engine = null
+        worker = null
         removePanel()
         bubble?.let { runCatching { windowManager.removeView(it) } }
         bubble = null
