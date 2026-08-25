@@ -21,14 +21,29 @@ class HandoffService {
 
   static const _channel = MethodChannel('gogo/overlay');
 
+  /// Package ids of the provider apps actually installed on this device, via
+  /// PackageManager. Requires the `<queries>` entries in the manifest.
+  Future<Set<String>> installedPackages(Iterable<String> packages) async {
+    if (defaultTargetPlatform != TargetPlatform.android || kIsWeb) return const {};
+    try {
+      final list = await _channel.invokeListMethod<String>(
+        'installedProviders',
+        {'packages': packages.toList()},
+      );
+      return (list ?? const []).toSet();
+    } on PlatformException {
+      return const {};
+    }
+  }
+
   Future<Handoff> open(RideProvider provider) async {
     if (defaultTargetPlatform != TargetPlatform.android || kIsWeb) {
       return Handoff.unavailable;
     }
     try {
       final result = await _channel.invokeMethod<String>('openProvider', {
-        'package': provider.androidPackage,
-        'deepLink': provider.deepLink,
+        'package': provider.packageId,
+        'deepLink': provider.scheme,
       });
       return Handoff.values.firstWhere(
         (h) => h.name == result,

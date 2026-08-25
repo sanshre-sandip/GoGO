@@ -44,6 +44,10 @@ class MainActivity : FlutterActivity() {
                         stopService(Intent(this, OverlayService::class.java))
                         result.success(true)
                     }
+                    "installedProviders" -> result.success(
+                        call.argument<List<String>>("packages")
+                            ?.filter { isInstalled(it) } ?: emptyList<String>()
+                    )
                     "openProvider" -> result.success(
                         openProvider(call.argument("package"), call.argument("deepLink"))
                     )
@@ -109,6 +113,9 @@ class MainActivity : FlutterActivity() {
         )
         return if (launch(store) || launch(web)) "store" else "unavailable"
     }
+
+    private fun isInstalled(packageName: String): Boolean =
+        packageManager.getLaunchIntentForPackage(packageName) != null
 
     private fun launch(intent: Intent): Boolean = try {
         startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

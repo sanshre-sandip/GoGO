@@ -74,7 +74,8 @@ class QuoteService {
     required LocationPoint pickup,
     required LocationPoint destination,
   }) async {
-    final installed = await handoff.installedPackages();
+    final installed =
+        await handoff.installedPackages(kProviders.map((p) => p.packageId));
     final results = await Future.wait([
       for (final c in connectors) c.quote(pickup: pickup, destination: destination),
     ]);
