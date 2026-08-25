@@ -1,8 +1,65 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/constants/provider_config.dart';
 import '../../core/theme/app_theme.dart';
+import '../../models/ride_provider.dart';
+import '../../services/quote_service.dart';
 import '../floating_assistant/overlay_service.dart';
+
+/// Shows exactly which providers can return a live fare, and what is still
+/// needed to switch the rest on. Nothing here pretends to work.
+class _LivePricing extends StatelessWidget {
+  const _LivePricing();
+
+  @override
+  Widget build(BuildContext context) {
+    const config = ProviderConfig();
+    final text = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+
+    String status(RideProvider p) => switch (p.pricing) {
+          PricingSupport.officialApi =>
+            config.yangoConfigured ? 'Live pricing on' : 'Needs credentials',
+          PricingSupport.none => 'No public fare API',
+          PricingSupport.forbiddenByTerms => 'Not permitted by their terms',
+        };
+
+    return Padding(
+      padding: const EdgeInsets.all(Spacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Live pricing', style: text.titleMedium),
+          const SizedBox(height: Spacing.sm),
+          for (final p in kProviders)
+            Padding(
+              padding: const EdgeInsets.only(bottom: Spacing.xs),
+              child: Row(
+                children: [
+                  Icon(Icons.circle, size: 10, color: p.color),
+                  const SizedBox(width: Spacing.sm),
+                  Expanded(child: Text(p.name, style: text.bodyMedium)),
+                  Text(
+                    status(p),
+                    style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          if (config.missing.isNotEmpty) ...[
+            const SizedBox(height: Spacing.sm),
+            Text(
+              'To enable live pricing, rebuild with:\n'
+              '${config.missing.map((m) => '  --dart-define=\$m').join('\n')}',
+              style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -60,6 +117,8 @@ class SettingsScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+            const Divider(),
+            const _LivePricing(),
             const Divider(),
             Padding(
               padding: const EdgeInsets.all(Spacing.md),

@@ -2,10 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/location_point.dart';
 import '../models/ride_preferences.dart';
+import '../models/provider_result.dart';
 import '../services/comparison_service.dart';
 import '../services/location_service.dart';
 import '../services/preference_interpreter.dart';
-import '../services/provider_service.dart';
+import '../services/quote_service.dart';
 import '../services/storage_service.dart';
 
 /// Overridden in main() once SharedPreferences has loaded.
@@ -14,8 +15,6 @@ final storageProvider = Provider<StorageService>(
 );
 
 final locationServiceProvider = Provider((ref) => const LocationService());
-final providerServiceProvider =
-    Provider<ProviderService>((ref) => const MockProviderService());
 final comparisonServiceProvider = Provider((ref) => const ComparisonService());
 final preferenceInterpreterProvider =
     Provider<PreferenceInterpreter>((ref) => const RuleBasedPreferenceInterpreter());
@@ -30,6 +29,9 @@ class SearchState {
   final String? searchError;
   final ComparisonResult? result;
 
+  /// Per-provider outcome, including the ones with no live price.
+  final List<ProviderResult> providerResults;
+
   const SearchState({
     this.pickup,
     this.destination,
@@ -39,6 +41,7 @@ class SearchState {
     this.locationError,
     this.searchError,
     this.result,
+    this.providerResults = const [],
   });
 
   bool get canSearch => destination != null && !searching;
@@ -52,6 +55,7 @@ class SearchState {
     String? locationError,
     String? searchError,
     ComparisonResult? result,
+    List<ProviderResult>? providerResults,
   }) =>
       SearchState(
         pickup: pickup ?? this.pickup,
@@ -62,6 +66,7 @@ class SearchState {
         locationError: locationError,
         searchError: searchError,
         result: result ?? this.result,
+        providerResults: providerResults ?? this.providerResults,
       );
 }
 
@@ -105,32 +110,43 @@ class SearchNotifier extends Notifier<SearchState> {
     ref.read(storageProvider).savePreferences(prefs);
   }
 
-  /// Returns true when there is a result worth showing.
+  /// Asks every provider for a real quote. Returns true when at least one came
+  /// back with a live price to rank.
   Future<bool> findRides() async {
     final destination = state.destination;
+    final pickup = state.pickup;
     if (destination == null) {
       state = state.copyWith(searchError: 'Pick a destination first.');
       return false;
     }
+    if (pickup == null) {
+      state = state.copyWith(
+        searchError: 'GoGo needs your pickup location to request quotes.',
+      );
+      return false;
+    }
 
     state = state.copyWith(searching: true);
-    final pickup = state.pickup ?? destination;
-    final tripKm = ref.read(locationServiceProvider).distanceKm(pickup, destination);
-
     try {
-      final options = await ref.read(providerServiceProvider).quote(
-            pickup: pickup,
-            destination: destination,
-            tripDistanceKm: tripKm,
-          );
+      final results = await ref
+          .read(quoteServiceProvider)
+          .quoteAll(pickup: pickup, destination: destination);
+      final live = [
+        for (final r in results)
+          if (r.hasLivePrice) r.option!,
+      ];
       final result =
-          ref.read(comparisonServiceProvider).compare(options, state.preferences);
-      state = state.copyWith(searching: false, result: result);
-      return !result.isEmpty;
+          ref.read(comparisonServiceProvider).compare(live, state.preferences);
+      state = state.copyWith(
+        searching: false,
+        result: result,
+        providerResults: results,
+      );
+      return true;
     } catch (_) {
       state = state.copyWith(
         searching: false,
-        searchError: "Couldn't load ride options. Please try again.",
+        searchError: "Couldn't reach the providers. Check your connection.",
       );
       return false;
     }
