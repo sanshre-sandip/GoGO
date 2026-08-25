@@ -1,36 +1,37 @@
 import 'ride_provider.dart';
 
+/// One real, quoted ride. Every field here came from a provider's API —
+/// nothing is estimated by GoGo.
 class RideOption {
   final String id;
   final RideProvider provider;
   final double price;
   final String currency;
-  final double driverDistanceKm;
-  final int etaMinutes;
+  /// Minutes until pickup, when the API reports it.
+  final int? etaMinutes;
   final String vehicleType;
+
+  /// How far the assigned driver is. Not every API reports this, so it is
+  /// optional and the ranking skips it when nobody provides it.
+  final double? driverDistanceKm;
+
+  /// Route length in km, when the API reports it.
+  final double? tripDistanceKm;
 
   const RideOption({
     required this.id,
     required this.provider,
     required this.price,
-    required this.driverDistanceKm,
-    required this.etaMinutes,
-    this.currency = 'NPR',
-    this.vehicleType = 'Car',
+    required this.currency,
+    this.etaMinutes,
+    required this.vehicleType,
+    this.driverDistanceKm,
+    this.tripDistanceKm,
   });
 
   String get priceLabel => '$currency ${price.toStringAsFixed(0)}';
-  String get distanceLabel => '${driverDistanceKm.toStringAsFixed(1)} km away';
-  String get etaLabel => 'ETA $etaMinutes min';
-
-  RideOption copyWith({double? price, double? driverDistanceKm, int? etaMinutes}) =>
-      RideOption(
-        id: id,
-        provider: provider,
-        price: price ?? this.price,
-        currency: currency,
-        driverDistanceKm: driverDistanceKm ?? this.driverDistanceKm,
-        etaMinutes: etaMinutes ?? this.etaMinutes,
-        vehicleType: vehicleType,
-      );
+  String? get etaLabel => etaMinutes == null ? null : 'ETA $etaMinutes min';
+  String? get distanceLabel => driverDistanceKm == null
+      ? null
+      : '${driverDistanceKm!.toStringAsFixed(1)} km away';
 }

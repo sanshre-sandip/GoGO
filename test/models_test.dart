@@ -75,7 +75,7 @@ void main() {
     final a = await service.quote(pickup: pickup, destination: dest, tripDistanceKm: 4);
     final b = await service.quote(pickup: pickup, destination: dest, tripDistanceKm: 4);
     expect(a.map((o) => o.price), b.map((o) => o.price));
-    expect(a, hasLength(3));
+    expect(a, hasLength(MockProviderService.providers.length));
   });
 }
 
