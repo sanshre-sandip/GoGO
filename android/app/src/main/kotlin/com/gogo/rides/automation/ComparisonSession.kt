@@ -82,6 +82,9 @@ class ComparisonSession(
     private val outcomes = LinkedHashMap<String, ProviderOutcome>()
     private var index = -1
     private var lastTripEntryAttempt = 0L
+    private var lastScreen: ScreenState? = null
+    private var lastScreenLog = 0L
+    private var lastTextDump = 0L
     private var timeoutToken: Runnable? = null
 
     val currentAdapter: ProviderAdapter? get() = adapters.getOrNull(index)
@@ -135,7 +138,7 @@ class ComparisonSession(
             return
         }
 
-        adapter.reset()
+        adapter.reset(id)
         transition(SessionState.PREPARING_PROVIDER)
 
         if (!ProviderLauncher.isInstalled(context, adapter.packageName)) {
@@ -171,7 +174,27 @@ class ComparisonSession(
         if (state == SessionState.COMPLETED || state == SessionState.CANCELLED) return
 
         val screen = adapter.detectScreen(root)
-        AutomationLog.log(id, adapter.providerId, "screen", screen.name)
+        val now = System.currentTimeMillis()
+
+        // Providers fire content-change events constantly; log a screen only
+        // when it changes, or once in a while so a stall is still visible.
+        if (screen != lastScreen || now - lastScreenLog > SCREEN_LOG_INTERVAL_MS) {
+            AutomationLog.log(id, adapter.providerId, "screen", screen.name)
+            lastScreen = screen
+            lastScreenLog = now
+        }
+
+        // When GoGo cannot place a screen, the words on it are the only way to
+        // teach the adapter. Debug builds keep them; release redacts them.
+        if (screen == ScreenState.UNKNOWN && now - lastTextDump > TEXT_DUMP_INTERVAL_MS) {
+            lastTextDump = now
+            AutomationLog.log(
+                id,
+                adapter.providerId,
+                "screen_texts",
+                NodeTools.collectTexts(root).take(25).joinToString(" | "),
+            )
+        }
 
         when (screen) {
             ScreenState.BLOCKED -> {
@@ -309,6 +332,10 @@ class ComparisonSession(
 
         /** Providers re-render constantly; don't retype on every event. */
         private const val TRIP_ENTRY_THROTTLE_MS = 1_200L
+
+        /** A stalled provider still gets a heartbeat line. */
+        private const val SCREEN_LOG_INTERVAL_MS = 5_000L
+        private const val TEXT_DUMP_INTERVAL_MS = 3_000L
     }
 }
 

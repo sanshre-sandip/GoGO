@@ -81,6 +81,23 @@ object NodeTools {
         return target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
     }
 
+    /**
+     * The first row of a suggestion list: the topmost clickable node that has
+     * its own text and lives inside a scrollable container. Providers label
+     * these rows with the matched address, not with what was typed, so they
+     * cannot be found by matching the query.
+     */
+    fun firstListItem(root: AccessibilityNodeInfo?, ignore: String? = null): AccessibilityNodeInfo? {
+        val list = findFirst(root) { it.isScrollable && it.isVisibleToUser } ?: return null
+        return findFirst(list) { node ->
+            val label = node.text?.toString()?.trim().orEmpty()
+            node.isVisibleToUser &&
+                label.isNotEmpty() &&
+                !label.equals(ignore, ignoreCase = true) &&
+                clickableSelfOrParent(node) != null
+        }
+    }
+
     fun scrollForward(root: AccessibilityNodeInfo?): Boolean {
         val scrollable = findFirst(root) { it.isScrollable && it.isVisibleToUser } ?: return false
         return scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)

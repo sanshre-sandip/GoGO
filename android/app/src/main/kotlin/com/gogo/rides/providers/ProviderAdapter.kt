@@ -1,6 +1,7 @@
 package com.gogo.rides.providers
 
 import android.view.accessibility.AccessibilityNodeInfo
+import com.gogo.rides.automation.AutomationLog
 import com.gogo.rides.automation.FareParser
 import com.gogo.rides.automation.FareResult
 import com.gogo.rides.automation.NodeTools
@@ -50,7 +51,9 @@ interface ProviderAdapter {
     fun detectScreen(root: AccessibilityNodeInfo?): ScreenState
     fun enterTrip(root: AccessibilityNodeInfo?, trip: TripContext): TripEntryResult
     fun extractFare(root: AccessibilityNodeInfo?): FareResult
-    fun reset()
+
+    /** Called before this provider's turn; [sessionId] is for logging. */
+    fun reset(sessionId: String)
 }
 
 /**
@@ -79,10 +82,17 @@ abstract class BaseAdapter(
 
     private val parser = FareParser()
     private var typedDestination = false
+    private var openedSearch = false
+    private var sessionId = "-"
 
-    override fun reset() {
+    override fun reset(sessionId: String) {
+        this.sessionId = sessionId
         typedDestination = false
+        openedSearch = false
     }
+
+    private fun log(event: String, detail: String = "") =
+        AutomationLog.log(sessionId, providerId, event, detail)
 
     override fun detectScreen(root: AccessibilityNodeInfo?): ScreenState {
         if (root == null) return ScreenState.UNKNOWN
@@ -101,31 +111,58 @@ abstract class BaseAdapter(
         }
     }
 
+    /**
+     * Types the destination into the provider's own search UI.
+     *
+     * Providers differ in whether the home screen has a real text field or a
+     * "Where to?" button that opens a search screen, so this walks: open
+     * search → type → pick the first suggestion → confirm. Every step is
+     * logged, because these selectors are the part that has to be tuned
+     * against each real app.
+     */
     override fun enterTrip(root: AccessibilityNodeInfo?, trip: TripContext): TripEntryResult {
         if (root == null) return TripEntryResult.IN_PROGRESS
 
-        if (!typedDestination) {
-            val field = NodeTools.findInput(root, destinationHints)
-                ?: NodeTools.findClickable(root, destinationHints)?.also { NodeTools.click(it) }
-                ?: return TripEntryResult.IN_PROGRESS
+        val editable = NodeTools.findInput(root, destinationHints)?.takeIf { it.isEditable }
 
-            if (field.isEditable) {
-                if (!NodeTools.setText(field, trip.destinationLabel)) {
-                    return TripEntryResult.UNSUPPORTED
+        if (!typedDestination) {
+            if (editable == null) {
+                // No field yet: tap whatever opens the search screen.
+                val entry = NodeTools.findClickable(root, destinationHints)
+                if (entry == null) {
+                    log("trip_no_entry_point", NodeTools.collectTexts(root).take(12).joinToString(" | "))
+                    return TripEntryResult.IN_PROGRESS
                 }
-                typedDestination = true
+                val clicked = NodeTools.click(entry)
+                openedSearch = openedSearch || clicked
+                log("trip_open_search", "clicked=$clicked")
+                return TripEntryResult.IN_PROGRESS
             }
+
+            val typed = NodeTools.setText(editable, trip.destinationLabel)
+            log("trip_type", "ok=$typed text=${trip.destinationLabel}")
+            if (!typed) return TripEntryResult.UNSUPPORTED
+            typedDestination = true
             return TripEntryResult.IN_PROGRESS
         }
 
-        // Destination typed: take the first suggestion, then any confirm button.
-        val suggestion = NodeTools.findClickable(root, listOf(trip.destinationLabel.take(12)))
-        if (suggestion != null && NodeTools.click(suggestion)) return TripEntryResult.IN_PROGRESS
+        // Typed: take the first suggestion the provider offers.
+        val suggestion = NodeTools.firstListItem(root, ignore = trip.destinationLabel)
+        if (suggestion != null) {
+            val label = suggestion.text?.toString().orEmpty()
+            val clicked = NodeTools.click(suggestion)
+            log("trip_suggestion", "clicked=$clicked label=$label")
+            if (clicked) return TripEntryResult.IN_PROGRESS
+        }
 
         val confirm = NodeTools.findClickable(root, confirmHints)
-        if (confirm != null && NodeTools.click(confirm)) return TripEntryResult.DONE
+        if (confirm != null && NodeTools.click(confirm)) {
+            log("trip_confirm", confirm.text?.toString().orEmpty())
+            return TripEntryResult.DONE
+        }
 
-        return TripEntryResult.IN_PROGRESS
+        // The destination is in; the provider may already be pricing it.
+        return if (editable == null) TripEntryResult.DONE else TripEntryResult.IN_PROGRESS
     }
 
     override fun extractFare(root: AccessibilityNodeInfo?): FareResult =
