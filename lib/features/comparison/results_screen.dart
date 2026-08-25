@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
-
 import '../../core/app_providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/widgets.dart';
 import '../../services/comparison_service.dart';
+import '../../services/handoff_service.dart';
 
 class ResultsScreen extends ConsumerWidget {
   const ResultsScreen({super.key});
@@ -71,7 +70,8 @@ class ResultsScreen extends ConsumerWidget {
               ),
             if (ref.read(providerServiceProvider).isMock)
               Text(
-                'Prices and driver positions are simulated for this preview.',
+                'Fares and driver positions are simulated — GoGo is not connected '
+                'to these providers yet. Check the real price in their app.',
                 textAlign: TextAlign.center,
                 style: text.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -84,37 +84,31 @@ class ResultsScreen extends ConsumerWidget {
   }
 }
 
-class _RideCard extends StatelessWidget {
+class _RideCard extends ConsumerWidget {
   const _RideCard({required this.scored, required this.isBest});
 
   final ScoredRide scored;
   final bool isBest;
 
-  Future<void> _openProvider(BuildContext context) async {
-    final option = scored.option;
-    final link = option.provider.deepLink;
-    var opened = false;
-    if (link != null) {
-      try {
-        opened = await launchUrl(Uri.parse(link), mode: LaunchMode.externalApplication);
-      } catch (_) {
-        opened = false; // app not installed / link unsupported
-      }
-    }
+  Future<void> _openProvider(BuildContext context, WidgetRef ref) async {
+    final provider = scored.option.provider;
+    final outcome = await ref.read(handoffServiceProvider).open(provider);
+    if (outcome == Handoff.opened || !context.mounted) return;
 
-    if (opened || !context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '${option.provider.name} can\'t be opened from GoGo yet — '
-          'open the app manually to book.',
+          outcome == Handoff.store
+              ? '${provider.name} isn\'t installed — opening its store page.'
+              : "${provider.name} can't be opened from GoGo. Open the app "
+                  'manually to book.',
         ),
       ),
     );
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final option = scored.option;
     final text = Theme.of(context).textTheme;
     return Card(
@@ -140,12 +134,18 @@ class _RideCard extends StatelessWidget {
             ),
             const SizedBox(height: Spacing.sm),
             Text(option.priceLabel, style: text.headlineSmall),
+            Text(
+              'Estimate — not a live quote',
+              style: text.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
             const SizedBox(height: Spacing.xs),
             Text('Driver ${option.distanceLabel} · ${option.etaLabel}'),
             const SizedBox(height: Spacing.md),
             OutlinedButton(
-              onPressed: () => _openProvider(context),
-              child: const Text('Open Provider'),
+              onPressed: () => _openProvider(context, ref),
+              child: Text('Open ${option.provider.name}'),
             ),
           ],
         ),

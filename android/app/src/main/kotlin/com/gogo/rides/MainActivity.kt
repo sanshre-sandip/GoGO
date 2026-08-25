@@ -1,5 +1,6 @@
 package com.gogo.rides
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -43,6 +44,9 @@ class MainActivity : FlutterActivity() {
                         stopService(Intent(this, OverlayService::class.java))
                         result.success(true)
                     }
+                    "openProvider" -> result.success(
+                        openProvider(call.argument("package"), call.argument("deepLink"))
+                    )
                     "consumePendingRequest" -> {
                         result.success(pendingPriorities)
                         pendingPriorities = null
@@ -75,6 +79,42 @@ class MainActivity : FlutterActivity() {
             startService(intent)
         }
         return true
+    }
+
+    /**
+     * Hands the user over to a provider's own app. Never books anything —
+     * it just opens the app (or its store page if it isn't installed).
+     * Returns "opened", "store" or "unavailable".
+     */
+    private fun openProvider(packageName: String?, deepLink: String?): String {
+        // A deep link is pinned to the provider's package so it can't be
+        // hijacked by a browser or another app.
+        if (deepLink != null && launch(Intent(Intent.ACTION_VIEW, Uri.parse(deepLink)).apply {
+                if (packageName != null) setPackage(packageName)
+            })
+        ) {
+            return "opened"
+        }
+
+        if (packageName == null) return "unavailable"
+
+        packageManager.getLaunchIntentForPackage(packageName)?.let {
+            if (launch(it)) return "opened"
+        }
+
+        val store = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName"))
+        val web = Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse("https://play.google.com/store/apps/details?id=$packageName"),
+        )
+        return if (launch(store) || launch(web)) "store" else "unavailable"
+    }
+
+    private fun launch(intent: Intent): Boolean = try {
+        startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        true
+    } catch (_: ActivityNotFoundException) {
+        false
     }
 
     private companion object {

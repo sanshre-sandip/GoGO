@@ -25,17 +25,36 @@ class MockProviderService implements ProviderService {
   @override
   bool get isMock => true;
 
+  /// Real apps GoGo can hand you over to. Fares below are still estimates —
+  /// only the handoff is real. Package names must match the manifest
+  /// `<queries>` block, or Android 11+ will report every app as "not installed".
   static const providers = <RideProvider>[
-    RideProvider(id: 'a', name: 'Provider A', color: Color(0xFF16A34A)),
-    RideProvider(id: 'b', name: 'Provider B', color: Color(0xFF7C3AED)),
-    RideProvider(id: 'c', name: 'Provider C', color: Color(0xFFEA580C)),
+    RideProvider(
+      id: 'pathao',
+      name: 'Pathao',
+      color: Color(0xFF16A34A),
+      androidPackage: 'com.pathao.user',
+    ),
+    RideProvider(
+      id: 'indrive',
+      name: 'inDrive',
+      color: Color(0xFF7C3AED),
+      androidPackage: 'sinet.startup.inDriver',
+    ),
+    RideProvider(
+      id: 'uber',
+      name: 'Uber',
+      color: Color(0xFF111827),
+      androidPackage: 'com.ubercab',
+      deepLink: 'uber://',
+    ),
   ];
 
   // base fare, per-km rate, vehicle
   static const _tariffs = {
-    'a': (90.0, 55.0, 'Car'),
-    'b': (110.0, 50.0, 'Car'),
-    'c': (75.0, 42.0, 'Bike'),
+    'pathao': (75.0, 42.0, 'Bike'),
+    'indrive': (90.0, 55.0, 'Car'),
+    'uber': (110.0, 50.0, 'Car'),
   };
 
   @override
