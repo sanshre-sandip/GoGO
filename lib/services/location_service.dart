@@ -28,6 +28,18 @@ class LocationService {
   const LocationService();
 
   Future<LocationPoint> current() async {
+    try {
+      return await _locate();
+    } on LocationException {
+      rethrow;
+    } catch (_) {
+      // Anything geolocator throws (permission request already in flight,
+      // platform errors) still has to end the spinner.
+      throw const LocationException(LocationFailure.unavailable);
+    }
+  }
+
+  Future<LocationPoint> _locate() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       throw const LocationException(LocationFailure.serviceDisabled);
     }
@@ -43,19 +55,33 @@ class LocationService {
       throw const LocationException(LocationFailure.permissionDenied);
     }
 
+    // A fresh fix can take forever indoors, so cap the wait and fall back to
+    // the last known position rather than spinning.
     try {
       final p = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 12),
+        ),
       );
-      return LocationPoint(
+      return _point(p);
+    } catch (_) {
+      Position? last;
+      try {
+        last = await Geolocator.getLastKnownPosition();
+      } catch (_) {
+        last = null;
+      }
+      if (last == null) throw const LocationException(LocationFailure.unavailable);
+      return _point(last);
+    }
+  }
+
+  LocationPoint _point(Position p) => LocationPoint(
         latitude: p.latitude,
         longitude: p.longitude,
         label: 'Current location',
       );
-    } catch (_) {
-      throw const LocationException(LocationFailure.unavailable);
-    }
-  }
 
   double distanceKm(LocationPoint a, LocationPoint b) =>
       Geolocator.distanceBetween(a.latitude, a.longitude, b.latitude, b.longitude) /

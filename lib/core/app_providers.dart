@@ -74,12 +74,18 @@ class SearchNotifier extends Notifier<SearchState> {
   }
 
   Future<void> refreshLocation() async {
+    if (state.locating) return; // a request is already in flight
     state = state.copyWith(locating: true);
     try {
       final point = await ref.read(locationServiceProvider).current();
       state = state.copyWith(pickup: point, locating: false);
     } on LocationException catch (e) {
       state = state.copyWith(locating: false, locationError: e.message);
+    } catch (_) {
+      state = state.copyWith(
+        locating: false,
+        locationError: LocationFailure.unavailable.message,
+      );
     }
   }
 
