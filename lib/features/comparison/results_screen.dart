@@ -5,7 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/app_providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/widgets.dart';
-import '../../models/ride_option.dart';
 import '../../services/comparison_service.dart';
 
 class ResultsScreen extends ConsumerWidget {

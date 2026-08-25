@@ -45,9 +45,9 @@ void main() {
       rides,
       RidePreferences.fromSelection({Priority.cheapest, Priority.nearest}),
     );
-    // A is cheapest but furthest, B is nearest but pricier: A and B tie on the
-    // normalized sum, and the cheaper one breaks the tie.
-    expect(result.bestMatch!.id, 'A');
+    // A is cheapest but furthest, B is 30 NPR more but much closer: the
+    // combined score puts B first, so price alone does not decide.
+    expect(result.bestMatch!.id, 'B');
     expect(result.ranked.last.option.id, 'C');
   });
 
