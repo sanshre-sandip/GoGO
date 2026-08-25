@@ -1,38 +1,43 @@
-# GoGo
+# GoGo — Find your better ride.
 
-Find your better ride. GoGo compares fare quotes from multiple ride providers (prices in NPR), ranks them against what you care about — cheapest, nearest driver, or fastest pickup — and explains why the winner wins.
+Local-first ride-comparison assistant. Pick a destination, choose what matters
+(cheapest / nearest driver / fastest pickup), and GoGo ranks the available
+options and explains its recommendation. No backend, no paid AI.
+
+## Run
+
+```bash
+flutter pub get
+flutter run                 # debug
+flutter test                # unit tests for the comparison engine + models
+flutter build apk --release # release APK
+```
 
 ## How it works
 
-1. Set a pickup point (auto-detected via GPS) and destination.
-2. Pick priorities: 💰 cheapest / 📍 nearest driver / ⚡ fastest pickup, optionally capped at "within X min".
-3. Providers are quoted and scored via weighted min-max normalization; the app ranks every option and generates a plain-language explanation of the winner's trade-offs.
+- `lib/services/comparison_service.dart` — the ranking engine. Min–max
+  normalizes price, driver distance and ETA (lower is better → higher score),
+  weights them by the selected priorities, and picks the highest total.
+  Deterministic and fully unit-tested.
+- `lib/services/provider_service.dart` — **mock** ride quotes. Replace
+  `MockProviderService` with a real implementation of `ProviderService` when a
+  legitimate provider integration exists; nothing else changes.
+- `lib/services/preference_interpreter.dart` — rule-based natural-language
+  priorities. A Gemini-backed implementation can drop in later; the MVP never
+  requires it.
+- `android/.../OverlayService.kt` — the floating assistant: a foreground
+  service drawing GoGo's own bubble and a compact priority panel over other
+  apps. It never reads the screen underneath. Tapping *Compare* launches the
+  app with the chosen priorities.
 
-Everything runs locally and deterministically: comparison, ranking, and text interpretation need no network.
+## Privacy
 
-## Status
+Location is used only to estimate driver distance and never leaves the device.
+Priorities and recent destinations are stored in SharedPreferences. GoGo never
+books a ride — the user finishes in the provider's own app.
 
-The engine is complete; the UI is not wired yet.
+## Known MVP limits
 
-- **Done**: models, `ComparisonService` (ranking + explanations), `ProviderService` (mocked quotes with seeded RNG), `LocationService` (permission flow + haversine distance), `PreferenceInterpreter` (rule-based text → priorities, LLM-swappable), `StorageService` (onboarding flag, preferences, recents), Riverpod state (`SearchNotifier`, `FloatingAssistantNotifier`).
-- **WIP**: screens/routing (`go_router` added but unused), deep links to provider apps (`url_launcher` added but unused), native Android floating-assistant overlay.
-- Quotes currently come from simulated mock providers; the service interface is ready for real APIs.
-
-## Getting started
-
-```sh
-flutter pub get
-flutter run
-```
-
-Requires Flutter with Dart SDK ^3.13.1.
-
-## Project layout
-
-```
-lib/
-  core/       providers
-  features/   floating_assistant/ (Android overlay)
-  models/     data types
-  services/   location, providers, comparison, preferences, storage
-```
+- Ride data is simulated; the results screen says so.
+- Destination search is a local place list plus free text (no geocoding API).
+- No map view, and the default Flutter launcher icon is still in place.
