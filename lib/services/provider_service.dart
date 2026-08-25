@@ -42,6 +42,13 @@ class MockProviderService implements ProviderService {
       androidPackage: 'sinet.startup.inDriver',
     ),
     RideProvider(
+      id: 'yango',
+      name: 'Yango',
+      color: Color(0xFFDC2626),
+      androidPackage: 'com.yandex.yango',
+      deepLink: 'yango://',
+    ),
+    RideProvider(
       id: 'uber',
       name: 'Uber',
       color: Color(0xFF111827),
@@ -54,6 +61,7 @@ class MockProviderService implements ProviderService {
   static const _tariffs = {
     'pathao': (75.0, 42.0, 'Bike'),
     'indrive': (90.0, 55.0, 'Car'),
+    'yango': (85.0, 48.0, 'Car'),
     'uber': (110.0, 50.0, 'Car'),
   };
 

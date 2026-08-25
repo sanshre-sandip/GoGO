@@ -60,6 +60,7 @@
              installed before handing the user over to it. -->
         <package android:name="com.pathao.user"/>
         <package android:name="sinet.startup.inDriver"/>
+        <package android:name="com.yandex.yango"/>
         <package android:name="com.ubercab"/>
         <intent>
             <action android:name="android.intent.action.VIEW"/>
