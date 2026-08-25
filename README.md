@@ -38,6 +38,9 @@ books a ride — the user finishes in the provider's own app.
 
 ## Known MVP limits
 
-- Ride data is simulated; the results screen says so.
+- Ride data is simulated; the results screen and every card say so. Only the
+  handoff to the provider's app is real.
+- Provider package names in `provider_service.dart` must be verified on a real
+  device — a wrong one silently degrades to "not installed".
 - Destination search is a local place list plus free text (no geocoding API).
 - No map view, and the default Flutter launcher icon is still in place.
