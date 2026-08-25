@@ -5,12 +5,20 @@ import 'package:gogo/models/ride_preferences.dart';
 import 'package:gogo/models/ride_provider.dart';
 import 'package:gogo/services/comparison_service.dart';
 
-RideOption ride(String id, double price, double km, int eta) => RideOption(
+RideOption ride(String id, double price, double? km, int? eta) => RideOption(
       id: id,
-      provider: RideProvider(id: id, name: 'Provider $id', color: const Color(0xFF000000)),
+      provider: RideProvider(
+        id: id,
+        name: 'Provider $id',
+        color: const Color(0xFF000000),
+        packageId: 'test.$id',
+        pricing: PricingSupport.none,
+      ),
       price: price,
+      currency: 'NPR',
       driverDistanceKm: km,
       etaMinutes: eta,
+      vehicleType: 'Car',
     );
 
 void main() {
@@ -111,6 +119,37 @@ void main() {
       const RidePreferences(pricePriority: 1, maxWaitMinutes: 1),
     );
     expect(result.ranked, hasLength(3));
+  });
+
+  test('a metric nobody reports is dropped, not guessed', () {
+    // Yango reports a fare and pickup time but no driver distance.
+    final noDistance = [ride('A', 250, null, 5), ride('B', 280, null, 3)];
+    final result = service.compare(
+      noDistance,
+      RidePreferences.fromSelection({Priority.nearest, Priority.fastest}),
+    );
+    expect(result.nearest, isNull);
+    expect(result.unusablePriorities, {Priority.nearest});
+    expect(result.bestMatch!.id, 'B'); // ranked on ETA alone
+  });
+
+  test('rides with an unknown ETA survive a wait limit', () {
+    final mixed = [ride('A', 250, null, null), ride('B', 900, null, 2)];
+    final result = service.compare(
+      mixed,
+      const RidePreferences(pricePriority: 1, maxWaitMinutes: 3),
+    );
+    expect(result.ranked.map((r) => r.option.id), containsAll(['A', 'B']));
+  });
+
+  test('when every chosen priority is unreported, price still ranks', () {
+    final noExtras = [ride('A', 300, null, null), ride('B', 200, null, null)];
+    final result = service.compare(
+      noExtras,
+      RidePreferences.fromSelection({Priority.fastest}),
+    );
+    expect(result.bestMatch!.id, 'B');
+    expect(result.unusablePriorities, {Priority.fastest});
   });
 
   test('explanation names the winner and the trade-off', () {
