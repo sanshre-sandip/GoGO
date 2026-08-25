@@ -53,6 +53,21 @@ For every provider, compare the log against what the screen actually showed:
 Any mismatch between an extracted fare and the visible fare is a **bug, not a
 tuning issue** — GoGo must show only what the provider displayed.
 
+## Reading a stall
+
+A provider that never gets past `ENTERING_TRIP_DATA` leaves a trail:
+
+| Log line | Meaning | Fix |
+|---|---|---|
+| `trip_no_entry_point` | Nothing on screen matched `destinationHints`; the line carries the first 12 visible strings | Add the real wording to that adapter's `destinationHints` |
+| `trip_open_search clicked=false` | The entry point was found but would not accept a click | The node's clickable ancestor is further than 6 hops, or it needs a gesture |
+| `trip_type ok=false` | The field refused `ACTION_SET_TEXT` | That app blocks programmatic text; the adapter should report `UNSUPPORTED` |
+| `trip_suggestion clicked=… label=…` | Which suggestion row was taken | If the label is wrong, the query never matched |
+| `screen_texts …` | What GoGo saw on a screen it could not place | Copy the wording into the adapter's hints |
+
+Screen states are logged on change plus a 5s heartbeat, so a wall of identical
+lines means the provider is re-rendering, not that GoGo is looping.
+
 ## Refining an adapter
 
 The word lists in `providers/Adapters.kt` are the tuning surface. To see what a
