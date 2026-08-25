@@ -156,6 +156,9 @@ class OverlayService : Service() {
 
     private fun showPanel() {
         val context = themed()
+        val list = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        results = list
+
         val content = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(16), dp(16), dp(16))
@@ -184,6 +187,17 @@ class OverlayService : Service() {
 
             addView(Button(context).apply {
                 text = "Compare"
+                setOnClickListener { compare() }
+            })
+            addView(ScrollView(context).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dp(260),
+                )
+                addView(list)
+            })
+            addView(Button(context).apply {
+                text = "Open GoGo"
                 setOnClickListener { openApp() }
             })
             addView(Button(context).apply {
@@ -193,10 +207,10 @@ class OverlayService : Service() {
         }
 
         val params = layoutParams().apply {
-            width = dp(240)
+            width = dp(300)
             gravity = Gravity.TOP or Gravity.START
             x = dp(12)
-            y = dp(120)
+            y = dp(90)
         }
         runCatching { windowManager.addView(content, params) }.onSuccess { panel = content }
     }
@@ -204,9 +218,95 @@ class OverlayService : Service() {
     private fun removePanel() {
         panel?.let { runCatching { windowManager.removeView(it) } }
         panel = null
+        results = null
     }
 
-    /** Hands the chosen priorities to the Flutter UI. GoGo never books anything itself. */
+    /**
+     * Runs the real comparison in the headless engine and draws the answer in
+     * the overlay, so the app underneath keeps running and stays visible.
+     */
+    private fun compare() {
+        val list = results ?: return
+        val channel = worker
+        list.removeAllViews()
+
+        if (channel == null) {
+            list.addView(note("GoGo's comparison engine isn't running. Reopen the assistant."))
+            return
+        }
+
+        list.addView(ProgressBar(themed()))
+        val installed = PROVIDER_PACKAGES.filter { ProviderLauncher.isInstalled(this, it) }
+
+        channel.invokeMethod(
+            "compare",
+            mapOf("priorities" to selected.toList(), "installed" to installed),
+            object : MethodChannel.Result {
+                override fun success(result: Any?) = render(result as? String)
+                override fun error(code: String, message: String?, details: Any?) =
+                    renderError(message ?: "Comparison failed.")
+                override fun notImplemented() = renderError("Comparison unavailable.")
+            },
+        )
+    }
+
+    private fun render(json: String?) {
+        val list = results ?: return
+        list.removeAllViews()
+        if (json == null) return renderError("No answer from GoGo.")
+
+        val body = runCatching { JSONObject(json) }.getOrNull()
+            ?: return renderError("Couldn't read the result.")
+
+        body.optString("error").takeIf { it.isNotEmpty() }?.let { return renderError(it) }
+
+        val destination = body.optString("destination")
+        if (destination.isNotEmpty()) list.addView(note("To $destination"))
+        val best = body.optString("best")
+
+        val providers = body.optJSONArray("providers") ?: return
+        for (i in 0 until providers.length()) {
+            val p = providers.optJSONObject(i) ?: continue
+            val price = p.optString("price")
+            val line = buildString {
+                if (p.optString("id") == best) append("🏆 ")
+                append(p.optString("name"))
+                if (price.isNotEmpty()) {
+                    append("  ").append(price)
+                    p.optString("eta").takeIf { it.isNotEmpty() }?.let { append("  ").append(it) }
+                } else {
+                    append(" — ").append(p.optString("message"))
+                }
+            }
+
+            list.addView(TextView(themed()).apply {
+                text = line
+                setTextColor(Color.BLACK)
+                setPadding(0, dp(8), 0, dp(2))
+            })
+            list.addView(Button(themed()).apply {
+                text = if (p.optBoolean("installed")) "Open ${p.optString("name")}"
+                else "Install ${p.optString("name")}"
+                setOnClickListener {
+                    ProviderLauncher.open(this@OverlayService, p.optString("package"), null)
+                }
+            })
+        }
+    }
+
+    private fun renderError(message: String) {
+        val list = results ?: return
+        list.removeAllViews()
+        list.addView(note(message))
+    }
+
+    private fun note(message: String) = TextView(themed()).apply {
+        text = message
+        setTextColor(Color.DKGRAY)
+        setPadding(0, dp(8), 0, dp(4))
+    }
+
+    /** Opens the full app — used only when the user asks for it. */
     private fun openApp() {
         removePanel()
         startActivity(
@@ -229,6 +329,20 @@ class OverlayService : Service() {
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
         PixelFormat.TRANSLUCENT,
     )
+
+    private fun startWorkerEngine() {
+        val loader = FlutterInjector.instance().flutterLoader()
+        loader.startInitialization(applicationContext)
+        loader.ensureInitializationComplete(applicationContext, null)
+
+        val created = FlutterEngine(applicationContext)
+        created.dartExecutor.executeDartEntrypoint(
+            DartExecutor.DartEntrypoint(loader.findAppBundlePath(), OVERLAY_ENTRYPOINT),
+        )
+        GeneratedPluginRegistrant.registerWith(created)
+        engine = created
+        worker = MethodChannel(created.dartExecutor.binaryMessenger, WORKER_CHANNEL)
+    }
 
     private fun startForegroundNotification() {
         val manager = getSystemService(NotificationManager::class.java)
@@ -275,6 +389,16 @@ class OverlayService : Service() {
         private const val CHANNEL_ID = "gogo_overlay"
         private const val NOTIFICATION_ID = 42
         private const val BRAND = 0xFF4F46E5.toInt()
+        private const val OVERLAY_ENTRYPOINT = "overlayMain"
+        private const val WORKER_CHANNEL = "gogo/overlay_worker"
+
+        /** Kept in step with kProviders in lib/services/quote_service.dart. */
+        private val PROVIDER_PACKAGES = listOf(
+            "com.pathao.user",
+            "sinet.startup.inDriver",
+            "com.yandex.yango",
+            "com.ubercab",
+        )
 
         // key must match Dart's Priority enum names
         private val PRIORITIES = listOf(
