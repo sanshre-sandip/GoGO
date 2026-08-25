@@ -69,6 +69,23 @@ class HomeScreen extends ConsumerWidget {
               trailing: const Icon(Icons.chevron_right_rounded),
             ),
             const SizedBox(height: Spacing.xl),
+            Text('What are you riding?', style: text.titleMedium),
+            const SizedBox(height: Spacing.sm),
+            Row(
+              children: [
+                for (final category in RideCategory.values)
+                  Padding(
+                    padding: const EdgeInsets.only(right: Spacing.sm),
+                    child: ChoiceChip(
+                      selected: state.preferences.category == category,
+                      onSelected: (_) => notifier.setCategory(category),
+                      avatar: Text(category.emoji),
+                      label: Text(category.label),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: Spacing.lg),
             Text('What matters most?', style: text.titleMedium),
             const SizedBox(height: Spacing.sm),
             for (final priority in Priority.values)
@@ -126,6 +143,7 @@ class HomeScreen extends ConsumerWidget {
                       await automation.start(
                         pickup: pickup,
                         destination: destination,
+                        category: state.preferences.category,
                       );
                       if (context.mounted) context.push('/results');
                     }

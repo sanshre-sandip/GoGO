@@ -42,6 +42,7 @@ class OverlayWorker {
         'destinationLabel': destination.label,
         'destinationLat': destination.latitude,
         'destinationLon': destination.longitude,
+        'category': storage.preferences.category.name,
       };
     } on LocationException catch (e) {
       return {'error': e.message};

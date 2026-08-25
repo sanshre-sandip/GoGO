@@ -13,6 +13,10 @@ class PathaoAdapter : BaseAdapter("pathao", "Pathao", "com.pathao.user") {
         listOf("where to", "destination", "search location", "drop off", "drop-off")
     override val fareHints = FareParser.DEFAULT_FARE_HINTS + listOf("fare", "estimated fare")
     override val confirmHints = listOf("confirm", "confirm pickup", "next", "continue")
+    override val categoryHints = mapOf(
+        RideCategory.BIKE to listOf("bike", "moto"),
+        RideCategory.CAR to listOf("car", "cab", "ride"),
+    )
 }
 
 /**
@@ -25,17 +29,31 @@ class InDriveAdapter : BaseAdapter("indrive", "inDrive", "sinet.startup.inDriver
     override val fareHints =
         FareParser.DEFAULT_FARE_HINTS + listOf("your price", "offer", "recommended")
     override val confirmHints = listOf("next", "continue", "confirm", "order")
+    override val categoryHints = mapOf(
+        RideCategory.BIKE to listOf("moto", "bike"),
+        RideCategory.CAR to listOf("city", "car"),
+    )
 }
 
 class YangoAdapter : BaseAdapter("yango", "Yango", "com.yandex.yango") {
     override val destinationHints = listOf("where to", "destination", "search", "address")
     override val fareHints = FareParser.DEFAULT_FARE_HINTS + listOf("from rs", "from npr", "ride")
     override val confirmHints = listOf("select service classes", "order", "confirm", "next")
+
+    // Seen on the device: Yango lists Fastest / Bike / Economy / Comfort.
+    override val categoryHints = mapOf(
+        RideCategory.BIKE to listOf("bike"),
+        RideCategory.CAR to listOf("economy", "comfort", "fastest"),
+    )
 }
 
 class UberAdapter : BaseAdapter("uber", "Uber", "com.ubercab") {
     override val destinationHints = listOf("where to", "destination", "enter destination")
     override val confirmHints = listOf("confirm", "request", "next", "choose")
+    override val categoryHints = mapOf(
+        RideCategory.BIKE to listOf("moto", "bike"),
+        RideCategory.CAR to listOf("uberx", "uber go", "go", "car"),
+    )
 }
 
 object ProviderRegistry {

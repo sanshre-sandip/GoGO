@@ -99,4 +99,46 @@ void main() {
     expect(session.providers, isEmpty);
     expect(session.best, isNull);
   });
+
+  test('a fare is labelled with its class only when GoGo picked one', () {
+    final labelled = ProviderOutcome.fromJson({
+      'id': 'yango', 'name': 'Yango', 'installed': true, 'succeeded': true,
+      'amount': 320.0, 'currency': 'NPR', 'vehicleType': 'Bike',
+    });
+    expect(labelled.fareWithClass, 'NPR 320 · Bike');
+
+    final unlabelled = ProviderOutcome.fromJson({
+      'id': 'pathao', 'name': 'Pathao', 'installed': true, 'succeeded': true,
+      'amount': 350.0, 'currency': 'NPR',
+    });
+    expect(unlabelled.vehicleType, isNull);
+    expect(unlabelled.fareWithClass, 'NPR 350');
+  });
+
+  test('an empty result explains itself per provider', () {
+    final session = AutomationSession.fromJson({
+      'state': 'COMPLETED',
+      'running': false,
+      'providers': [
+        {'id': 'pathao', 'name': 'Pathao', 'installed': true, 'succeeded': false,
+         'failure': 'TIMEOUT'},
+        {'id': 'indrive', 'name': 'inDrive', 'installed': true, 'succeeded': false,
+         'failure': 'TIMEOUT'},
+        {'id': 'uber', 'name': 'Uber', 'installed': false, 'succeeded': false,
+         'failure': 'APP_NOT_INSTALLED'},
+      ],
+    });
+
+    final explanation = session.emptyExplanation;
+    expect(explanation, contains('Pathao and inDrive'));
+    expect(explanation, contains('did not reach a price in time'));
+    expect(explanation, contains('Uber'));
+    expect(explanation, contains('not on this phone'));
+  });
+
+  test('every failure reason has a long explanation too', () {
+    for (final reason in FailureReason.values) {
+      expect(reason.explanation, isNotEmpty);
+    }
+  });
 }

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.provider.Settings
 import com.gogo.rides.ProviderLauncher
 import com.gogo.rides.providers.ProviderRegistry
+import com.gogo.rides.providers.RideCategory
 import com.gogo.rides.providers.TripContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -91,6 +92,7 @@ object AutomationController : ComparisonSession.Listener {
             put("amount", fare.amount ?: JSONObject.NULL)
             put("currency", fare.currency ?: JSONObject.NULL)
             put("rawText", fare.rawText ?: JSONObject.NULL)
+            put("vehicleType", fare.vehicleType ?: JSONObject.NULL)
         }
     }
 
@@ -139,6 +141,10 @@ object AutomationController : ComparisonSession.Listener {
         destinationLabel = args["destinationLabel"] as? String ?: "",
         destinationLat = (args["destinationLat"] as? Number)?.toDouble() ?: 0.0,
         destinationLon = (args["destinationLon"] as? Number)?.toDouble() ?: 0.0,
-        category = args["category"] as? String,
+        category = when ((args["category"] as? String)?.lowercase()) {
+            "bike" -> RideCategory.BIKE
+            "car" -> RideCategory.CAR
+            else -> RideCategory.ANY
+        },
     )
 }

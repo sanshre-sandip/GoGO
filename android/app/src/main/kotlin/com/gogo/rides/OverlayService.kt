@@ -287,6 +287,11 @@ class OverlayService : Service() {
                 destinationLabel = body.optString("destinationLabel"),
                 destinationLat = body.optDouble("destinationLat"),
                 destinationLon = body.optDouble("destinationLon"),
+                category = when (body.optString("category").lowercase()) {
+                    "bike" -> com.gogo.rides.providers.RideCategory.BIKE
+                    "car" -> com.gogo.rides.providers.RideCategory.CAR
+                    else -> com.gogo.rides.providers.RideCategory.ANY
+                },
             ),
         )
     }
@@ -321,8 +326,12 @@ class OverlayService : Service() {
                 else -> "○"
             }
             val detail = when {
-                p.optBoolean("succeeded") ->
-                    "${p.optString("currency")} ${p.optDouble("amount").toInt()}"
+                p.optBoolean("succeeded") -> buildString {
+                    append(p.optString("currency")).append(' ')
+                    append(p.optDouble("amount").toInt())
+                    p.optString("vehicleType").takeIf { it.isNotEmpty() && it != "null" }
+                        ?.let { append(" · ").append(it) }
+                }
                 !p.isNull("failure") -> failureText(p)
                 id == current -> "Checking…"
                 else -> "Waiting"

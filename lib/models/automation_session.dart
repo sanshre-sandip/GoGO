@@ -37,6 +37,31 @@ enum FailureReason {
   cancelled,
 }
 
+extension FailureExplanation on FailureReason {
+  /// The longer "why", for the results screen.
+  String get explanation => switch (this) {
+        FailureReason.appNotInstalled =>
+          'the app is not on this phone, so there was nothing to ask.',
+        FailureReason.accessibilityUnavailable =>
+          "GoGo's accessibility service was off, so it could not read the screen.",
+        FailureReason.launchFailed => 'the app would not open.',
+        FailureReason.blockedScreen =>
+          'the app wanted a sign-in or a permission before showing prices.',
+        FailureReason.tripEntryUnavailable =>
+          'GoGo could not put the destination into that app\'s own search.',
+        FailureReason.fareNotFound =>
+          'the app never displayed a price GoGo could read.',
+        FailureReason.lowConfidence =>
+          'a number was on screen but GoGo was not sure it was the fare, so it '
+              'refused to report it.',
+        FailureReason.ambiguous =>
+          'several prices were on screen at once and GoGo would not pick one.',
+        FailureReason.timeout =>
+          'the app did not reach a price in time — usually trip entry stalling.',
+        FailureReason.cancelled => 'you stopped the comparison.',
+      };
+}
+
 extension FailureMessage on FailureReason {
   String get message => switch (this) {
         FailureReason.appNotInstalled => 'Not installed',
@@ -72,6 +97,9 @@ class ProviderOutcome {
   final double? amount;
   final String? currency;
   final String? rawText;
+
+  /// The ride class the fare belongs to, when GoGo actually selected one.
+  final String? vehicleType;
   final double confidence;
   final DateTime? detectedAt;
   final FailureReason? failure;
@@ -86,6 +114,7 @@ class ProviderOutcome {
     this.amount,
     this.currency,
     this.rawText,
+    this.vehicleType,
     this.confidence = 0,
     this.detectedAt,
     this.failure,
@@ -101,6 +130,7 @@ class ProviderOutcome {
         amount: (json['amount'] as num?)?.toDouble(),
         currency: json['currency'] as String?,
         rawText: json['rawText'] as String?,
+        vehicleType: json['vehicleType'] as String?,
         confidence: (json['confidence'] as num?)?.toDouble() ?? 0,
         detectedAt: json['timestamp'] == null
             ? null
@@ -111,6 +141,11 @@ class ProviderOutcome {
 
   String get fareLabel =>
       succeeded ? '${currency ?? ''} ${amount!.toStringAsFixed(0)}'.trim() : '';
+
+  /// "NPR 350 · Bike", or just the fare when the class is unknown — GoGo does
+  /// not label a fare with a class it did not pick.
+  String get fareWithClass =>
+      vehicleType == null ? fareLabel : '$fareLabel · $vehicleType';
 
   String get statusLabel => succeeded
       ? fareLabel
@@ -155,6 +190,26 @@ class AutomationSession {
 
   bool get finished =>
       state == SessionState.completed || state == SessionState.cancelled;
+
+  /// Plain-English account of why no fare came back, built from what actually
+  /// happened per provider rather than a generic apology.
+  String get emptyExplanation {
+    if (providers.isEmpty) return 'No comparison has run yet.';
+
+    final byReason = <FailureReason, List<String>>{};
+    for (final p in providers.where((p) => p.failure != null)) {
+      byReason.putIfAbsent(p.failure!, () => []).add(p.name);
+    }
+    if (byReason.isEmpty) return 'No provider reported a fare.';
+
+    final parts = byReason.entries.map((e) {
+      final names = e.key == FailureReason.appNotInstalled
+          ? e.value.join(', ')
+          : e.value.join(' and ');
+      return '$names: ${e.key.explanation}';
+    });
+    return parts.join('\n');
+  }
 }
 
 /// One line from the native automation log.

@@ -61,10 +61,22 @@ class ResultsScreen extends ConsumerWidget {
                       Card(
                         child: Padding(
                           padding: const EdgeInsets.all(Spacing.md),
-                          child: Text(
-                            'No fare could be read from any app. GoGo does not '
-                            'estimate — nothing is shown rather than a guess.',
-                            style: text.bodyMedium,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('No fare could be read', style: text.titleMedium),
+                              const SizedBox(height: Spacing.sm),
+                              Text(s.emptyExplanation, style: text.bodyMedium),
+                              const SizedBox(height: Spacing.sm),
+                              Text(
+                                'GoGo does not estimate fares, so it shows '
+                                'nothing rather than a guess.',
+                                style: text.bodySmall?.copyWith(
+                                  color:
+                                      Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -146,6 +158,8 @@ class _BestFare extends StatelessWidget {
             const SizedBox(height: Spacing.xs),
             Text(best.name, style: text.headlineSmall),
             Text(best.fareLabel, style: text.headlineSmall),
+            if (best.vehicleType != null)
+              Text(best.vehicleType!, style: text.bodyMedium),
           ],
         ),
       ),
@@ -183,7 +197,9 @@ class _ProviderRow extends ConsumerWidget {
         subtitle: Text(
           isCurrent && !provider.succeeded && provider.failure == null
               ? 'Checking…'
-              : provider.statusLabel,
+              : provider.succeeded
+                  ? provider.fareWithClass
+                  : provider.failure?.explanation ?? provider.statusLabel,
         ),
         trailing: provider.succeeded
             ? TextButton(

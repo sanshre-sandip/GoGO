@@ -102,7 +102,22 @@ class SearchNotifier extends Notifier<SearchState> {
   void togglePriority(Priority priority, bool selected) {
     final next = {...state.preferences.selection};
     selected ? next.add(priority) : next.remove(priority);
-    setPreferences(RidePreferences.fromSelection(next));
+    setPreferences(
+      RidePreferences.fromSelection(next, category: state.preferences.category),
+    );
+  }
+
+  void setCategory(RideCategory category) {
+    final p = state.preferences;
+    setPreferences(
+      RidePreferences(
+        pricePriority: p.pricePriority,
+        distancePriority: p.distancePriority,
+        etaPriority: p.etaPriority,
+        maxWaitMinutes: p.maxWaitMinutes,
+        category: category,
+      ),
+    );
   }
 
   void setPreferences(RidePreferences prefs) {

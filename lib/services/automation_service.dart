@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/automation_session.dart';
 import '../models/location_point.dart';
+import '../models/ride_preferences.dart';
 
 /// Talks to the native comparison session. All the automation logic lives in
 /// Kotlin — this is only the bridge and the state it publishes.
@@ -40,7 +41,7 @@ class AutomationService {
   Future<AutomationSession?> start({
     required LocationPoint pickup,
     required LocationPoint destination,
-    String? category,
+    RideCategory category = RideCategory.any,
   }) async {
     if (!supported) return null;
     try {
@@ -51,7 +52,7 @@ class AutomationService {
         'destinationLabel': destination.label,
         'destinationLat': destination.latitude,
         'destinationLon': destination.longitude,
-        'category': category,
+        'category': category.name,
       });
       if (raw == null) return null;
       return AutomationSession.fromJson(jsonDecode(raw) as Map<String, dynamic>);

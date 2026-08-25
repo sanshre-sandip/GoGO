@@ -1,3 +1,21 @@
+/// What the user wants to ride in. Providers name their classes differently;
+/// each adapter maps this onto its own wording.
+enum RideCategory { any, bike, car }
+
+extension RideCategoryLabel on RideCategory {
+  String get label => switch (this) {
+        RideCategory.any => 'Any',
+        RideCategory.bike => 'Bike',
+        RideCategory.car => 'Car',
+      };
+
+  String get emoji => switch (this) {
+        RideCategory.any => '🚦',
+        RideCategory.bike => '🏍️',
+        RideCategory.car => '🚗',
+      };
+}
+
 enum Priority { cheapest, nearest, fastest }
 
 extension PriorityLabel on Priority {
@@ -21,15 +39,22 @@ class RidePreferences {
   final double distancePriority;
   final double etaPriority;
   final int? maxWaitMinutes;
+  final RideCategory category;
 
   const RidePreferences({
     this.pricePriority = 0,
     this.distancePriority = 0,
     this.etaPriority = 0,
     this.maxWaitMinutes,
+    this.category = RideCategory.any,
   });
 
-  factory RidePreferences.fromSelection(Set<Priority> selected) => RidePreferences(
+  factory RidePreferences.fromSelection(
+    Set<Priority> selected, {
+    RideCategory category = RideCategory.any,
+  }) =>
+      RidePreferences(
+        category: category,
         pricePriority: selected.contains(Priority.cheapest) ? 1 : 0,
         distancePriority: selected.contains(Priority.nearest) ? 1 : 0,
         etaPriority: selected.contains(Priority.fastest) ? 1 : 0,
@@ -45,6 +70,7 @@ class RidePreferences {
           distancePriority: 1,
           etaPriority: 1,
           maxWaitMinutes: maxWaitMinutes,
+          category: category,
         )
       : this;
 
@@ -59,6 +85,7 @@ class RidePreferences {
         'distancePriority': distancePriority,
         'etaPriority': etaPriority,
         'maxWaitMinutes': maxWaitMinutes,
+        'category': category.name,
       };
 
   factory RidePreferences.fromJson(Map<String, dynamic> json) => RidePreferences(
@@ -66,5 +93,9 @@ class RidePreferences {
         distancePriority: (json['distancePriority'] as num?)?.toDouble() ?? 0,
         etaPriority: (json['etaPriority'] as num?)?.toDouble() ?? 0,
         maxWaitMinutes: json['maxWaitMinutes'] as int?,
+        category: RideCategory.values.firstWhere(
+          (c) => c.name == json['category'],
+          orElse: () => RideCategory.any,
+        ),
       );
 }
