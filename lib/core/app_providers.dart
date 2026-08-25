@@ -91,10 +91,7 @@ class SearchNotifier extends Notifier<SearchState> {
   void togglePriority(Priority priority, bool selected) {
     final next = {...state.preferences.selection};
     selected ? next.add(priority) : next.remove(priority);
-    setPreferences(
-      RidePreferences.fromSelection(next)
-        ..hashCode, // keep analyzer quiet about cascade-only use
-    );
+    setPreferences(RidePreferences.fromSelection(next));
   }
 
   void setPreferences(RidePreferences prefs) {
