@@ -56,8 +56,15 @@ class FareParser(
         fareHints: List<String> = DEFAULT_FARE_HINTS,
         rejectHints: List<String> = DEFAULT_REJECT_HINTS,
     ): FareResult {
+        // Providers usually render the label ("Estimated fare") and the amount
+        // ("Rs. 350") as separate nodes, so fare wording anywhere on the screen
+        // lends a number some credibility — less than wording in its own string.
+        val screenHasFareWord = texts.any { text ->
+            fareHints.any { text.lowercase().contains(it) }
+        }
+
         val candidates = texts
-            .flatMap { candidatesIn(it, fareHints, rejectHints) }
+            .flatMap { candidatesIn(it, fareHints, rejectHints, screenHasFareWord) }
             .sortedByDescending { it.confidence }
 
         if (candidates.isEmpty()) {
@@ -102,6 +109,7 @@ class FareParser(
         text: String,
         fareHints: List<String>,
         rejectHints: List<String>,
+        screenHasFareWord: Boolean,
     ): List<FareCandidate> {
         val lower = text.lowercase()
         val hasFareWord = fareHints.any { lower.contains(it) }
@@ -125,6 +133,9 @@ class FareParser(
             if (hasFareWord) {
                 score += 0.3
                 reasons += "fare-wording"
+            } else if (screenHasFareWord) {
+                score += 0.12
+                reasons += "fare-wording-nearby"
             }
             if (unitFollows(after)) {
                 score -= 0.6

@@ -10,7 +10,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
-        android:label="GoGo"
+        android:label="@string/app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -42,6 +42,24 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps GoGo's floating ride-comparison button available over other apps."/>
+        </service>
+
+        <!--
+             Reads the supported ride apps' screens during a comparison the user
+             starts, so GoGo can report the fare those apps display. Restricted
+             to those packages by accessibility_service_config.xml.
+        -->
+        <service
+            android:name=".automation.GoGoAccessibilityService"
+            android:exported="false"
+            android:label="GoGo ride comparison"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config"/>
         </service>
 
         <!-- Don't delete the meta-data below.

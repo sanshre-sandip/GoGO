@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/constants/provider_config.dart';
 import '../../core/theme/app_theme.dart';
@@ -117,6 +118,15 @@ class SettingsScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+            ListTile(
+              leading: const Icon(Icons.bug_report_outlined),
+              title: const Text('Automation debug'),
+              subtitle: const Text(
+                'Accessibility status, installed providers, session state and logs.',
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => context.push('/debug'),
+            ),
             const Divider(),
             const _LivePricing(),
             const Divider(),

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  GoGo only listens to the ride apps it supports, and only while the user has
+  started a comparison. It never records the screen and never reads any other
+  app. packageNames below is the enforcement, not just an intention.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:canPerformGestures="false"
+    android:notificationTimeout="200"
+    android:packageNames="com.pathao.user,sinet.startup.inDriver,com.yandex.yango,com.ubercab"
+    android:description="@string/accessibility_description"
+    android:settingsActivity="com.gogo.rides.MainActivity" />

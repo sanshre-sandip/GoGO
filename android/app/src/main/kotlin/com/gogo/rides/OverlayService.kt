@@ -25,6 +25,8 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
+import com.gogo.rides.automation.AutomationController
+import com.gogo.rides.providers.TripContext
 import io.flutter.FlutterInjector
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.dart.DartExecutor
@@ -47,6 +49,12 @@ class OverlayService : Service() {
     private var results: LinearLayout? = null
     private val selected = linkedSetOf("cheapest", "nearest")
 
+    /** Redraws the panel whenever the comparison session moves on. */
+    private val sessionListener: (JSONObject) -> Unit = { snapshot ->
+        mainThread.post { renderSession(snapshot) }
+    }
+    private val mainThread = android.os.Handler(android.os.Looper.getMainLooper())
+
     /** Headless engine that runs the same comparison code as the app. */
     private var engine: FlutterEngine? = null
     private var worker: MethodChannel? = null
@@ -59,6 +67,7 @@ class OverlayService : Service() {
         startForegroundNotification()
         startWorkerEngine()
         showBubble()
+        AutomationController.addListener(sessionListener)
         isRunning = true
     }
 
@@ -72,6 +81,7 @@ class OverlayService : Service() {
     }
 
     override fun onDestroy() {
+        AutomationController.removeListener(sessionListener)
         engine?.destroy()
         engine = null
         worker = null
@@ -222,76 +232,148 @@ class OverlayService : Service() {
     }
 
     /**
-     * Runs the real comparison in the headless engine and draws the answer in
-     * the overlay, so the app underneath keeps running and stays visible.
+     * Starts a real comparison: GoGo walks the supported apps one at a time,
+     * lets each one price the trip itself, and reads what it displays.
+     *
+     * The trip comes from the headless engine (the last destination chosen in
+     * the app) because the overlay has no room to pick one.
      */
     private fun compare() {
         val list = results ?: return
-        val channel = worker
         list.removeAllViews()
 
+        if (!com.gogo.rides.automation.GoGoAccessibilityService.isEnabled(this)) {
+            list.addView(note("Turn on GoGo in Settings › Accessibility to compare automatically."))
+            list.addView(Button(themed()).apply {
+                text = "Open Accessibility settings"
+                setOnClickListener { AutomationController.openAccessibilitySettings(this@OverlayService) }
+            })
+            return
+        }
+
+        val channel = worker
         if (channel == null) {
-            list.addView(note("GoGo's comparison engine isn't running. Reopen the assistant."))
+            list.addView(note("GoGo's engine isn't running. Reopen the assistant."))
             return
         }
 
         list.addView(ProgressBar(themed()))
-        val installed = PROVIDER_PACKAGES.filter { ProviderLauncher.isInstalled(this, it) }
+        list.addView(note("Getting your trip…"))
 
         channel.invokeMethod(
-            "compare",
-            mapOf("priorities" to selected.toList(), "installed" to installed),
+            "tripContext",
+            null,
             object : MethodChannel.Result {
-                override fun success(result: Any?) = render(result as? String)
+                override fun success(result: Any?) = startSession(result as? String)
                 override fun error(code: String, message: String?, details: Any?) =
-                    renderError(message ?: "Comparison failed.")
-                override fun notImplemented() = renderError("Comparison unavailable.")
+                    renderError(message ?: "Couldn't read your trip.")
+                override fun notImplemented() = renderError("Trip lookup unavailable.")
             },
         )
     }
 
-    private fun render(json: String?) {
-        val list = results ?: return
-        list.removeAllViews()
-        if (json == null) return renderError("No answer from GoGo.")
-
-        val body = runCatching { JSONObject(json) }.getOrNull()
-            ?: return renderError("Couldn't read the result.")
+    private fun startSession(tripJson: String?) {
+        val body = tripJson?.let { runCatching { JSONObject(it) }.getOrNull() }
+            ?: return renderError("Couldn't read your trip.")
 
         body.optString("error").takeIf { it.isNotEmpty() }?.let { return renderError(it) }
 
-        val destination = body.optString("destination")
-        if (destination.isNotEmpty()) list.addView(note("To $destination"))
-        val best = body.optString("best")
+        AutomationController.start(
+            this,
+            TripContext(
+                pickupLabel = body.optString("pickupLabel"),
+                pickupLat = body.optDouble("pickupLat"),
+                pickupLon = body.optDouble("pickupLon"),
+                destinationLabel = body.optString("destinationLabel"),
+                destinationLat = body.optDouble("destinationLat"),
+                destinationLon = body.optDouble("destinationLon"),
+            ),
+        )
+    }
 
-        val providers = body.optJSONArray("providers") ?: return
+    /** Live progress and, at the end, the cheapest fare GoGo actually saw. */
+    private fun renderSession(snapshot: JSONObject) {
+        val list = results ?: return
+        list.removeAllViews()
+
+        val providers = snapshot.optJSONArray("providers") ?: return
+        val running = snapshot.optBoolean("running")
+        val current = snapshot.optString("currentProvider")
+        val done = (0 until providers.length()).count { i ->
+            val p = providers.optJSONObject(i)
+            p != null && (p.optBoolean("succeeded") || !p.isNull("failure"))
+        }
+
+        list.addView(
+            note(
+                if (running) "Checking ${(done + 1).coerceAtMost(providers.length())} of ${providers.length()}"
+                else "Comparison finished",
+            ),
+        )
+
         for (i in 0 until providers.length()) {
             val p = providers.optJSONObject(i) ?: continue
-            val price = p.optString("price")
-            val line = buildString {
-                if (p.optString("id") == best) append("🏆 ")
-                append(p.optString("name"))
-                if (price.isNotEmpty()) {
-                    append("  ").append(price)
-                    p.optString("eta").takeIf { it.isNotEmpty() }?.let { append("  ").append(it) }
-                } else {
-                    append(" — ").append(p.optString("message"))
-                }
+            val id = p.optString("id")
+            val mark = when {
+                p.optBoolean("succeeded") -> "✓"
+                !p.isNull("failure") -> "✕"
+                id == current -> "⏳"
+                else -> "○"
+            }
+            val detail = when {
+                p.optBoolean("succeeded") ->
+                    "${p.optString("currency")} ${p.optDouble("amount").toInt()}"
+                !p.isNull("failure") -> failureText(p)
+                id == current -> "Checking…"
+                else -> "Waiting"
             }
 
             list.addView(TextView(themed()).apply {
-                text = line
+                text = "$mark ${p.optString("name")} — $detail"
                 setTextColor(Color.BLACK)
-                setPadding(0, dp(8), 0, dp(2))
-            })
-            list.addView(Button(themed()).apply {
-                text = if (p.optBoolean("installed")) "Open ${p.optString("name")}"
-                else "Install ${p.optString("name")}"
-                setOnClickListener {
-                    ProviderLauncher.open(this@OverlayService, p.optString("package"), null)
-                }
+                setPadding(0, dp(6), 0, dp(2))
             })
         }
+
+        val best = snapshot.optJSONObject("best")
+        if (!running && best != null) {
+            list.addView(TextView(themed()).apply {
+                text = "Best detected fare: ${best.optString("name")} " +
+                    "${best.optString("currency")} ${best.optDouble("amount").toInt()}"
+                setTextColor(Color.BLACK)
+                textSize = 16f
+                setPadding(0, dp(10), 0, dp(4))
+            })
+            list.addView(Button(themed()).apply {
+                text = "Open ${best.optString("name")}"
+                setOnClickListener {
+                    ProviderLauncher.open(this@OverlayService, best.optString("package"), null)
+                }
+            })
+        } else if (!running) {
+            list.addView(note("No fare could be read from any app. Nothing was guessed."))
+        }
+
+        if (running) {
+            list.addView(Button(themed()).apply {
+                text = "Cancel"
+                setOnClickListener { AutomationController.cancel() }
+            })
+        }
+    }
+
+    private fun failureText(provider: JSONObject): String = when (provider.optString("failure")) {
+        "APP_NOT_INSTALLED" -> "Not installed"
+        "ACCESSIBILITY_UNAVAILABLE" -> "Accessibility off"
+        "LAUNCH_FAILED" -> "Could not open"
+        "BLOCKED_SCREEN" -> provider.optString("note", "Needs sign-in")
+        "TRIP_ENTRY_UNAVAILABLE" -> "Trip entry unavailable"
+        "FARE_NOT_FOUND" -> "No fare shown"
+        "LOW_CONFIDENCE" -> "Fare unclear"
+        "AMBIGUOUS" -> "Several fares shown"
+        "TIMEOUT" -> "Timed out"
+        "CANCELLED" -> "Cancelled"
+        else -> "No fare"
     }
 
     private fun renderError(message: String) {

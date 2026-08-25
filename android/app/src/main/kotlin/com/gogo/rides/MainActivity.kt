@@ -6,6 +6,8 @@ import android.os.Build
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import com.gogo.rides.automation.AutomationController
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
@@ -50,6 +52,26 @@ class MainActivity : FlutterActivity() {
                     "openProvider" -> result.success(
                         openProvider(call.argument("package"), call.argument("deepLink"))
                     )
+                    "accessibilityStatus" ->
+                        result.success(AutomationController.diagnostics(this).toString())
+                    "openAccessibilitySettings" -> {
+                        AutomationController.openAccessibilitySettings(this)
+                        result.success(true)
+                    }
+                    "startComparison" -> {
+                        val args = call.arguments as? Map<*, *> ?: emptyMap<String, Any>()
+                        result.success(
+                            AutomationController
+                                .start(this, AutomationController.tripFrom(args))
+                                .toString(),
+                        )
+                    }
+                    "cancelComparison" -> {
+                        AutomationController.cancel()
+                        result.success(true)
+                    }
+                    "sessionSnapshot" -> result.success(AutomationController.snapshot().toString())
+                    "automationLogs" -> result.success(AutomationController.logs().toString())
                     "consumePendingRequest" -> {
                         result.success(pendingPriorities)
                         pendingPriorities = null
@@ -57,6 +79,7 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        streamSessionUpdates(flutterEngine)
     }
 
     private fun canDrawOverlays() =
@@ -84,6 +107,30 @@ class MainActivity : FlutterActivity() {
         return true
     }
 
+    /** Pushes every session update to Flutter as it happens. */
+    private fun streamSessionUpdates(engine: FlutterEngine) {
+        EventChannel(engine.dartExecutor.binaryMessenger, EVENTS).setStreamHandler(
+            object : EventChannel.StreamHandler {
+                private var forward: ((org.json.JSONObject) -> Unit)? = null
+
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    val sink = events ?: return
+                    val listener: (org.json.JSONObject) -> Unit = { snapshot ->
+                        runOnUiThread { sink.success(snapshot.toString()) }
+                    }
+                    forward = listener
+                    AutomationController.addListener(listener)
+                    sink.success(AutomationController.snapshot().toString())
+                }
+
+                override fun onCancel(arguments: Any?) {
+                    forward?.let(AutomationController::removeListener)
+                    forward = null
+                }
+            },
+        )
+    }
+
     private fun openProvider(packageName: String?, deepLink: String?): String =
         ProviderLauncher.open(this, packageName, deepLink)
 
@@ -91,5 +138,6 @@ class MainActivity : FlutterActivity() {
 
     private companion object {
         const val CHANNEL = "gogo/overlay"
+        const val EVENTS = "gogo/automation_events"
     }
 }

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GoGo</string>
+    <string name="accessibility_description">GoGo uses this to compare ride fares for you. When you tap Compare, it opens each supported ride app in turn, enters your trip, and reads the fare that app displays. It only ever looks at the ride apps you chose, only during a comparison you started, and it never records your screen or reads any other app.</string>
+</resources>

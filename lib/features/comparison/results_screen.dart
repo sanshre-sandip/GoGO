@@ -1,126 +1,136 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/app_providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/widgets.dart';
-import '../../models/provider_result.dart';
-import '../../models/ride_preferences.dart';
-import '../../services/comparison_service.dart';
+import '../../models/automation_session.dart';
+import '../../services/automation_service.dart';
 import '../../services/handoff_service.dart';
+import '../../services/quote_service.dart';
 
+/// Live view of the comparison: GoGo opens each installed provider in turn and
+/// reads the fare that app itself displays. Only fares actually extracted are
+/// shown — a provider that could not be read says why.
 class ResultsScreen extends ConsumerWidget {
   const ResultsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(searchProvider);
-    final result = state.result;
-    final others = [
-      for (final r in state.providerResults)
-        if (!r.hasLivePrice) r,
-    ];
+    final session = ref.watch(automationSessionProvider);
     final text = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Available Rides')),
+      appBar: AppBar(
+        title: const Text('Comparing rides'),
+        actions: [
+          session.maybeWhen(
+            data: (s) => s.running
+                ? TextButton(
+                    onPressed: ref.read(automationServiceProvider).cancel,
+                    child: const Text('Cancel'),
+                  )
+                : const SizedBox.shrink(),
+            orElse: () => const SizedBox.shrink(),
+          ),
+        ],
+      ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(Spacing.md),
-          children: [
-            if (result == null || result.isEmpty)
-              const _NoLivePrices()
-            else ...[
-              _BestMatch(result: result),
-              const SizedBox(height: Spacing.md),
-              Wrap(
-                spacing: Spacing.sm,
-                runSpacing: Spacing.sm,
-                children: [
-                  if (result.cheapest != null)
-                    WinnerChip(
-                      label: '💰 Cheapest',
-                      value: result.cheapest!.provider.name,
+        child: session.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => MessageState(
+            emoji: '⚠️',
+            title: "Couldn't follow the comparison",
+            body: '$e',
+          ),
+          data: (s) => s.providers.isEmpty
+              ? const MessageState(
+                  emoji: '🚦',
+                  title: 'No comparison running',
+                  body: 'Start one from the home screen.',
+                )
+              : ListView(
+                  padding: const EdgeInsets.all(Spacing.md),
+                  children: [
+                    _Progress(session: s),
+                    const SizedBox(height: Spacing.md),
+                    if (s.finished && s.best != null) ...[
+                      _BestFare(best: s.best!),
+                      const SizedBox(height: Spacing.md),
+                    ],
+                    if (s.finished && s.best == null) ...[
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(Spacing.md),
+                          child: Text(
+                            'No fare could be read from any app. GoGo does not '
+                            'estimate — nothing is shown rather than a guess.',
+                            style: text.bodyMedium,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: Spacing.md),
+                    ],
+                    for (final provider in s.providers)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: Spacing.sm),
+                        child: _ProviderRow(
+                          provider: provider,
+                          isCurrent: provider.id == s.currentProviderId && s.running,
+                        ),
+                      ),
+                    const SizedBox(height: Spacing.sm),
+                    Text(
+                      'Fares are read from each provider\'s own screen at the '
+                      'moment GoGo looked. Confirm in the app before booking.',
+                      style: text.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
-                  if (result.nearest != null)
-                    WinnerChip(
-                      label: '📍 Nearest',
-                      value: result.nearest!.provider.name,
-                    ),
-                  if (result.fastest != null)
-                    WinnerChip(
-                      label: '⚡ Fastest',
-                      value: result.fastest!.provider.name,
-                    ),
-                ],
-              ),
-              if (result.unusablePriorities.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: Spacing.sm),
-                  child: Text(
-                    'Ignored: ${result.unusablePriorities.map((p) => p.label).join(', ')} — '
-                    'the providers with live prices did not report that data.',
-                    style: text.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
+                  ],
                 ),
-              const SizedBox(height: Spacing.lg),
-              for (final scored in result.ranked)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: Spacing.md),
-                  child: _LiveCard(
-                    scored: scored,
-                    isBest: scored.option.id == result.bestMatch!.id,
-                    installed: state.providerResults
-                        .any((r) => r.provider.id == scored.option.provider.id &&
-                            r.appInstalled),
-                  ),
-                ),
-            ],
-            if (others.isNotEmpty) ...[
-              const SizedBox(height: Spacing.sm),
-              Text('No live price', style: text.titleMedium),
-              const SizedBox(height: Spacing.xs),
-              Text(
-                'GoGo will not guess a fare. Open these apps to see theirs.',
-                style: text.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: Spacing.md),
-              for (final other in others)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: Spacing.md),
-                  child: _UnavailableCard(result: other),
-                ),
-            ],
-          ],
         ),
       ),
     );
   }
 }
 
-class _NoLivePrices extends StatelessWidget {
-  const _NoLivePrices();
+class _Progress extends StatelessWidget {
+  const _Progress({required this.session});
+
+  final AutomationSession session;
 
   @override
-  Widget build(BuildContext context) => const Padding(
-        padding: EdgeInsets.symmetric(vertical: Spacing.xl),
-        child: MessageState(
-          emoji: '📭',
-          title: 'No live prices for this trip',
-          body: 'None of the providers returned a fare GoGo can compare. Open '
-              'an app below to check its price directly.',
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final total = session.providers.length;
+    final done = session.checkedCount;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          session.running
+              ? 'Checking ${(done + 1).clamp(1, total)} of $total'
+              : 'Checked $done of $total',
+          style: text.titleMedium,
         ),
-      );
+        const SizedBox(height: Spacing.sm),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(Radii.pill),
+          child: LinearProgressIndicator(
+            value: total == 0 ? 0 : done / total,
+            minHeight: 6,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-class _BestMatch extends StatelessWidget {
-  const _BestMatch({required this.result});
+class _BestFare extends StatelessWidget {
+  const _BestFare({required this.best});
 
-  final ComparisonResult result;
+  final ProviderOutcome best;
 
   @override
   Widget build(BuildContext context) {
@@ -132,11 +142,10 @@ class _BestMatch extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('🏆 Best Match', style: text.titleMedium),
+            Text('🏆 Best detected fare', style: text.titleMedium),
             const SizedBox(height: Spacing.xs),
-            Text(result.bestMatch!.provider.name, style: text.headlineSmall),
-            const SizedBox(height: Spacing.sm),
-            Text(result.explanation, style: text.bodyMedium),
+            Text(best.name, style: text.headlineSmall),
+            Text(best.fareLabel, style: text.headlineSmall),
           ],
         ),
       ),
@@ -144,136 +153,46 @@ class _BestMatch extends StatelessWidget {
   }
 }
 
-class _ProviderButton extends ConsumerWidget {
-  const _ProviderButton({required this.result});
+class _ProviderRow extends ConsumerWidget {
+  const _ProviderRow({required this.provider, required this.isCurrent});
 
-  final ProviderResult result;
+  final ProviderOutcome provider;
+  final bool isCurrent;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final provider = result.provider;
-    return OutlinedButton(
-      onPressed: () async {
-        final outcome = await ref.read(handoffServiceProvider).open(provider);
-        if (outcome == Handoff.opened || !context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              outcome == Handoff.store
-                  ? '${provider.name} is not installed — opening its store page.'
-                  : '${provider.name} could not be opened on this device.',
-            ),
-          ),
-        );
-      },
-      child: Text(
-        result.appInstalled ? 'Open ${provider.name}' : 'Install ${provider.name}',
-      ),
-    );
-  }
-}
-
-class _LiveCard extends StatelessWidget {
-  const _LiveCard({
-    required this.scored,
-    required this.isBest,
-    required this.installed,
-  });
-
-  final ScoredRide scored;
-  final bool isBest;
-  final bool installed;
-
-  @override
-  Widget build(BuildContext context) {
-    final option = scored.option;
-    final text = Theme.of(context).textTheme;
-    final facts = [
-      if (option.distanceLabel != null) 'Driver ${option.distanceLabel}',
-      if (option.etaLabel != null) option.etaLabel!,
-      if (option.tripDistanceKm != null)
-        '${option.tripDistanceKm!.toStringAsFixed(1)} km trip',
-    ];
-
-    return Card(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(Radii.md),
-        side: isBest
-            ? BorderSide(color: Theme.of(context).colorScheme.primary, width: 2)
-            : BorderSide.none,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(Spacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.circle, size: 12, color: option.provider.color),
-                const SizedBox(width: Spacing.sm),
-                Text(option.provider.name, style: text.titleMedium),
-                const Spacer(),
-                Text(option.vehicleType, style: text.bodySmall),
-              ],
-            ),
-            const SizedBox(height: Spacing.sm),
-            Text(option.priceLabel, style: text.headlineSmall),
-            if (facts.isNotEmpty) ...[
-              const SizedBox(height: Spacing.xs),
-              Text(facts.join(' · ')),
-            ],
-            const SizedBox(height: Spacing.md),
-            _ProviderButton(
-              result: ProviderResult(
-                provider: option.provider,
-                status: QuoteStatus.live,
-                option: option,
-                appInstalled: installed,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _UnavailableCard extends StatelessWidget {
-  const _UnavailableCard({required this.result});
-
-  final ProviderResult result;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final brand = kProviders
+        .where((p) => p.id == provider.id)
+        .map((p) => p.color)
+        .firstOrNull;
+
+    final icon = provider.succeeded
+        ? Icons.check_circle_rounded
+        : provider.failure != null
+            ? Icons.cancel_outlined
+            : isCurrent
+                ? Icons.hourglass_top_rounded
+                : Icons.circle_outlined;
+
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(Spacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.circle, size: 12, color: result.provider.color),
-                const SizedBox(width: Spacing.sm),
-                Text(result.provider.name, style: text.titleMedium),
-                const Spacer(),
-                Text(
-                  result.appInstalled ? 'Installed' : 'Not installed',
-                  style: text.bodySmall,
-                ),
-              ],
-            ),
-            const SizedBox(height: Spacing.sm),
-            Text(
-              result.statusMessage,
-              style: text.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: Spacing.md),
-            _ProviderButton(result: result),
-          ],
+      child: ListTile(
+        leading: Icon(icon, color: brand ?? scheme.outline),
+        title: Text(provider.name, style: text.titleMedium),
+        subtitle: Text(
+          isCurrent && !provider.succeeded && provider.failure == null
+              ? 'Checking…'
+              : provider.statusLabel,
         ),
+        trailing: provider.succeeded
+            ? TextButton(
+                onPressed: () => ref
+                    .read(handoffServiceProvider)
+                    .open(kProviders.firstWhere((p) => p.id == provider.id)),
+                child: const Text('Open'),
+              )
+            : null,
       ),
     );
   }

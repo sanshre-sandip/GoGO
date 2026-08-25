@@ -6,6 +6,7 @@ import '../../core/app_providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/widgets.dart';
 import '../../models/ride_preferences.dart';
+import '../../services/automation_service.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -88,20 +89,45 @@ class HomeScreen extends ConsumerWidget {
             FilledButton(
               onPressed: state.canSearch
                   ? () async {
-                      final ok = await notifier.findRides();
+                      final messenger = ScaffoldMessenger.of(context);
+                      final automation = ref.read(automationServiceProvider);
+                      final diagnostics = await automation.diagnostics();
+
                       if (!context.mounted) return;
-                      if (ok) {
-                        context.push('/results');
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                      if (diagnostics != null && !diagnostics.accessibilityEnabled) {
+                        messenger.showSnackBar(
                           SnackBar(
-                            content: Text(
-                              ref.read(searchProvider).searchError ??
-                                  'No rides available right now.',
+                            content: const Text(
+                              'Turn on GoGo in Accessibility settings so it can '
+                              'read the fares each app shows.',
+                            ),
+                            action: SnackBarAction(
+                              label: 'Open',
+                              onPressed: automation.openAccessibilitySettings,
                             ),
                           ),
                         );
+                        return;
                       }
+
+                      final pickup = state.pickup;
+                      final destination = state.destination;
+                      if (pickup == null || destination == null) {
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'GoGo needs your pickup and destination first.',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+
+                      await automation.start(
+                        pickup: pickup,
+                        destination: destination,
+                      );
+                      if (context.mounted) context.push('/results');
                     }
                   : null,
               child: state.searching
@@ -110,7 +136,7 @@ class HomeScreen extends ConsumerWidget {
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('FIND RIDES'),
+                  : const Text('COMPARE RIDES'),
             ),
             if (state.destination == null)
               Padding(

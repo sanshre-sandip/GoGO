@@ -36,6 +36,27 @@ Location is used only to estimate driver distance and never leaves the device.
 Priorities and recent destinations are stored in SharedPreferences. GoGo never
 books a ride — the user finishes in the provider's own app.
 
+## How a comparison runs
+
+`COMPARE RIDES` starts a native session (`automation/ComparisonSession.kt`).
+For each installed provider it opens the app, waits for its UI, types the
+destination into that app's own search field, waits for the app to price the
+trip itself, and reads the fare off the screen through Android's accessibility
+framework. GoGo never computes a fare — a provider yields either an extracted
+number or a stated reason it has none.
+
+This requires the user to enable **GoGo ride comparison** in Settings ›
+Accessibility. The service is restricted to the four supported packages and
+only reads while a session the user started is running.
+
+**Two constraints worth knowing:** using the accessibility API to drive other
+apps is against Google Play policy, so this is a sideload-only build; and
+automating these apps is against their terms of service, which puts the
+accounts used at risk.
+
+Every adapter's screen wording is **unverified until run on hardware** — see
+[docs/automation-testing.md](docs/automation-testing.md).
+
 ## Live pricing
 
 GoGo never invents a fare. Each provider is either quoted through an official
