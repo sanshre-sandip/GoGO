@@ -139,7 +139,7 @@ class ComparisonService {
       if (winner.id != cheapest.id && p.pricePriority > 0)
         '${(winner.price - cheapest.price).toStringAsFixed(0)} ${winner.currency} more than ${cheapest.provider.name}',
       if (winner.id != nearest.id && p.distancePriority > 0)
-        'a slightly further driver than ${nearest.provider.name}',
+        'further from you than ${nearest.provider.name}',
       if (winner.id != fastest.id && p.etaPriority > 0)
         '${winner.etaMinutes - fastest.etaMinutes} min longer to arrive than ${fastest.provider.name}',
     ];
@@ -147,7 +147,7 @@ class ComparisonService {
     final good = _join(wins);
     return trade.isEmpty
         ? '$name $good.'
-        : '$name costs ${_join(trade)}, but it $good.';
+        : '$name is ${_join(trade)}, but it $good.';
   }
 
   String _join(List<String> parts) => parts.length == 1
