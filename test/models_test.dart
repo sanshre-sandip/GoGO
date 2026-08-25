@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gogo/models/location_point.dart';
 import 'package:gogo/models/ride_option.dart';
 import 'package:gogo/models/ride_preferences.dart';
+import 'package:gogo/services/location_service.dart';
 import 'package:gogo/services/preference_interpreter.dart';
 import 'package:gogo/services/provider_service.dart';
 
@@ -55,6 +56,18 @@ void main() {
     expect(prefs.maxWaitMinutes, 5);
   });
 
+  test('placeLabel reads like a Maps address', () {
+    expect(
+      placeLabel(name: 'Thamel Marg', subLocality: 'Thamel', locality: 'Kathmandu'),
+      'Thamel Marg, Kathmandu',
+    );
+    // Falls through to the next useful part when the specific one is missing.
+    expect(placeLabel(subLocality: 'Patan', locality: 'Lalitpur'), 'Patan, Lalitpur');
+    // Never repeats the city back at you.
+    expect(placeLabel(name: 'Kathmandu', locality: 'Kathmandu'), 'Kathmandu');
+    expect(placeLabel(), '');
+  });
+
   test('mock quotes are deterministic for the same trip', () async {
     const service = MockProviderService();
     const pickup = LocationPoint(latitude: 27.7, longitude: 85.3, label: 'here');
@@ -65,3 +78,6 @@ void main() {
     expect(a, hasLength(3));
   });
 }
+
+// placeLabel is appended here rather than in its own file — it is one pure
+// helper, not a feature.

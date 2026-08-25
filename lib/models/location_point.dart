@@ -21,8 +21,9 @@ class LocationPoint {
         label: json['label'] as String? ?? '',
       );
 
+  String get coordinates =>
+      '${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)}';
+
   @override
-  String toString() => label.isEmpty
-      ? '${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)}'
-      : label;
+  String toString() => label.isEmpty ? coordinates : label;
 }

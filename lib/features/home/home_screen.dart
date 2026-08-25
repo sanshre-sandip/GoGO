@@ -45,7 +45,7 @@ class HomeScreen extends ConsumerWidget {
               title: state.locating
                   ? 'Finding your location…'
                   : state.pickup?.label ?? 'Location unavailable',
-              subtitle: state.locationError ?? state.pickup?.toString(),
+              subtitle: state.locationError ?? state.pickup?.coordinates,
               isError: state.locationError != null,
               trailing: state.locating
                   ? const SizedBox(
