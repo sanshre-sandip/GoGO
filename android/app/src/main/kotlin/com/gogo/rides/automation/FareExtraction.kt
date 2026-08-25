@@ -25,6 +25,8 @@ data class FareResult(
     val currency: String? = null,
     val rawText: String? = null,
     val confidence: Double = 0.0,
+    /** The class this fare belongs to, when GoGo knows which one it picked. */
+    val vehicleType: String? = null,
     val timestamp: Long = System.currentTimeMillis(),
     val candidates: List<FareCandidate> = emptyList(),
 ) {

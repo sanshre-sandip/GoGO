@@ -28,6 +28,9 @@ enum class TripEntryResult {
     UNSUPPORTED,
 }
 
+/** What the user wants to ride in. Providers name these differently. */
+enum class RideCategory { ANY, BIKE, CAR }
+
 data class TripContext(
     val pickupLabel: String,
     val pickupLat: Double,
@@ -35,7 +38,7 @@ data class TripContext(
     val destinationLabel: String,
     val destinationLat: Double,
     val destinationLon: Double,
-    val category: String? = null,
+    val category: RideCategory = RideCategory.ANY,
 )
 
 /**
@@ -80,15 +83,29 @@ abstract class BaseAdapter(
     protected open val rejectHints = FareParser.DEFAULT_REJECT_HINTS
     protected open val confirmHints = listOf("confirm", "search", "done", "next", "continue")
 
+    /**
+     * Wording each provider uses for a ride class. Unverified until seen in a
+     * real run — a miss means GoGo takes whatever class the app defaulted to
+     * and says so, rather than claiming a class it did not choose.
+     */
+    protected open val categoryHints: Map<RideCategory, List<String>> = mapOf(
+        RideCategory.BIKE to listOf("bike", "moto"),
+        RideCategory.CAR to listOf("car", "economy", "ride"),
+    )
+
     private val parser = FareParser()
     private var typedDestination = false
     private var openedSearch = false
     private var sessionId = "-"
 
+    /** The class GoGo actually managed to select, if any. */
+    private var chosenClass: String? = null
+
     override fun reset(sessionId: String) {
         this.sessionId = sessionId
         typedDestination = false
         openedSearch = false
+        chosenClass = null
     }
 
     private fun log(event: String, detail: String = "") =
@@ -155,6 +172,8 @@ abstract class BaseAdapter(
             if (clicked) return TripEntryResult.IN_PROGRESS
         }
 
+        selectCategory(root, trip.category)
+
         val confirm = NodeTools.findClickable(root, confirmHints)
         if (confirm != null && NodeTools.click(confirm)) {
             log("trip_confirm", confirm.text?.toString().orEmpty())
@@ -165,6 +184,26 @@ abstract class BaseAdapter(
         return if (editable == null) TripEntryResult.DONE else TripEntryResult.IN_PROGRESS
     }
 
+    /**
+     * Taps the requested ride class if this provider shows one. Best effort:
+     * when nothing matches, the provider's own default class stands and
+     * [chosenClass] stays null so the fare is not labelled with a guess.
+     */
+    private fun selectCategory(root: AccessibilityNodeInfo?, category: RideCategory) {
+        if (category == RideCategory.ANY || chosenClass != null) return
+        val hints = categoryHints[category] ?: return
+
+        val option = NodeTools.findClickable(root, hints) ?: return
+        val label = option.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+            ?: option.contentDescription?.toString()?.trim()
+        if (NodeTools.click(option)) {
+            chosenClass = label ?: category.name.lowercase()
+            log("category_selected", "${category.name} as ${chosenClass}")
+        }
+    }
+
     override fun extractFare(root: AccessibilityNodeInfo?): FareResult =
-        parser.parse(providerId, NodeTools.collectTexts(root), fareHints, rejectHints)
+        parser
+            .parse(providerId, NodeTools.collectTexts(root), fareHints, rejectHints)
+            .copy(vehicleType = chosenClass)
 }
