@@ -51,7 +51,7 @@ class _LivePricing extends StatelessWidget {
             const SizedBox(height: Spacing.sm),
             Text(
               'To enable live pricing, rebuild with:\n'
-              '${config.missing.map((m) => '  --dart-define=\$m').join('\n')}',
+              '${config.missing.map((m) => '  --dart-define=$m').join('\n')}',
               style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
             ),
           ],
