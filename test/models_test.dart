@@ -60,6 +60,12 @@ void main() {
     expect(placeLabel(subLocality: 'Patan', locality: 'Lalitpur'), 'Patan, Lalitpur');
     expect(placeLabel(name: 'Kathmandu', locality: 'Kathmandu'), 'Kathmandu');
     expect(placeLabel(), '');
+    // A plus code is coordinates in disguise — fall through to the real name.
+    expect(
+      placeLabel(name: 'M8C2+R8Q', street: 'Pulchowk Road', locality: 'Lalitpur'),
+      'Pulchowk Road, Lalitpur',
+    );
+    expect(placeLabel(name: 'M8C2+R8Q', locality: 'Lalitpur'), 'Lalitpur');
   });
 
   test('rule-based interpreter reads a plain sentence', () async {

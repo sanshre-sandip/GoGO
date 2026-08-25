@@ -19,6 +19,7 @@ class ProviderConfig {
 
   /// What a developer still has to supply, for display in Settings.
   List<String> get missing => [
-        if (!yangoConfigured) 'Yango: YANGO_CLID and YANGO_API_KEY',
+        if (yangoClid.isEmpty) 'YANGO_CLID=<your clid>',
+        if (yangoApiKey.isEmpty) 'YANGO_API_KEY=<your key>',
       ];
 }

@@ -19,9 +19,9 @@ flutter build apk --release # release APK
   normalizes price, driver distance and ETA (lower is better → higher score),
   weights them by the selected priorities, and picks the highest total.
   Deterministic and fully unit-tested.
-- `lib/services/provider_service.dart` — **mock** ride quotes. Replace
-  `MockProviderService` with a real implementation of `ProviderService` when a
-  legitimate provider integration exists; nothing else changes.
+- `lib/services/quote_service.dart` — the provider registry and quote fan-out.
+  Each provider has a `ProviderConnector`: a real API client where one exists,
+  otherwise a handoff-only connector that reports why there is no price.
 - `lib/services/preference_interpreter.dart` — rule-based natural-language
   priorities. A Gemini-backed implementation can drop in later; the MVP never
   requires it.
@@ -36,11 +36,20 @@ Location is used only to estimate driver distance and never leaves the device.
 Priorities and recent destinations are stored in SharedPreferences. GoGo never
 books a ride — the user finishes in the provider's own app.
 
-## Known MVP limits
+## Live pricing
 
-- Ride data is simulated; the results screen and every card say so. Only the
-  handoff to the provider's app is real.
-- Provider package names in `provider_service.dart` must be verified on a real
-  device — a wrong one silently degrades to "not installed".
-- Destination search is a local place list plus free text (no geocoding API).
-- No map view, and the default Flutter launcher icon is still in place.
+GoGo never invents a fare. Each provider is either quoted through an official
+API or explicitly reported as having no live price — see
+[docs/provider-verification.md](docs/provider-verification.md).
+
+Yango is the one provider with an official fare API. Supply credentials at build
+time; without them the app says "Needs credentials" instead of showing a number:
+
+```bash
+flutter build apk --release \
+  --dart-define=YANGO_CLID=your_clid \
+  --dart-define=YANGO_API_KEY=your_key
+```
+
+## Known limits
+

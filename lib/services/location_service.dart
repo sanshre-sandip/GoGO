@@ -27,6 +27,11 @@ class LocationException implements Exception {
 
 const _fallbackLabel = 'Current location';
 
+/// Plus codes ("M8C2+R8Q") are what Android's geocoder returns when it has no
+/// street name. They are coordinates in disguise, so we skip them and use the
+/// next useful part instead.
+final _plusCode = RegExp(r'^[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3}$');
+
 /// Google-Maps-ish short address: the specific bit, then the city.
 /// Kept pure and top-level so it can be unit tested without a device.
 String placeLabel({
@@ -36,7 +41,10 @@ String placeLabel({
   String? locality,
 }) {
   bool useful(String? v) =>
-      v != null && v.trim().isNotEmpty && v.trim() != locality?.trim();
+      v != null &&
+      v.trim().isNotEmpty &&
+      v.trim() != locality?.trim() &&
+      !_plusCode.hasMatch(v.trim());
 
   final specific = [name, street, subLocality].firstWhere(useful, orElse: () => null);
   final city = locality?.trim();
